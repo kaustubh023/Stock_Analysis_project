@@ -15,7 +15,7 @@ Backend runs at `http://127.0.0.1:8000`.
 2. `npm install`
 3. `npm run dev`
 
-Frontend runs at `http://127.0.0.1:5173`.
+Frontend runs at `http://localhost:5173` (or `http://127.0.0.1:5173`). The dev server proxies `/api` to the backend.
 
 ## Implemented Features
 - User register and login (JWT)
@@ -32,3 +32,17 @@ Frontend runs at `http://127.0.0.1:5173`.
   - Line graph
   - Scatter graph
   - Linear regression graph
+
+## New: BTC‑USD Hourly Forecast
+- Location: Other Features → “BTC‑USD Hourly Forecast”
+- Backend API: `GET /api/crypto/btcusd-hourly/`
+- What it shows:
+  - Current BTC‑USD price
+  - ARIMA‑based forecast for the next 1 hour
+  - Chart combining recent hourly history and the next‑hour prediction
+
+## Usage Notes
+- Most APIs require authentication. Log in from the frontend; the app stores tokens and calls the backend with `Authorization: Bearer <token>`.
+- Default dev URLs:
+  - Frontend: `http://localhost:5173`
+  - Backend: `http://127.0.0.1:8000`

@@ -407,6 +407,64 @@ button:hover {
   overflow: auto;
 }
 
+.risk-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.risk-col {
+  background: var(--dark-surface);
+  border: 1px solid var(--dark-border);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.risk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.risk-title {
+  margin: 0;
+  font-family: "Syne", sans-serif;
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.risk-title.low { color: #25d366; }
+.risk-title.med { color: #f7c948; }
+.risk-title.high { color: #ff4d6d; }
+
+.risk-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-family: "DM Mono", monospace;
+  font-size: 0.78rem;
+  border: 1px solid;
+}
+
+.risk-pill.low {
+  color: #25d366;
+  border-color: rgba(37, 211, 102, 0.35);
+  background: rgba(37, 211, 102, 0.12);
+}
+
+.risk-pill.med {
+  color: var(--amber);
+  border-color: rgba(247, 201, 72, 0.35);
+  background: rgba(247, 201, 72, 0.12);
+}
+
+.risk-pill.high {
+  color: var(--neg);
+  border-color: rgba(255, 77, 109, 0.35);
+  background: rgba(255, 77, 109, 0.12);
+}
+
 .stock-item {
   text-align: left;
   background: #f6fafc;
@@ -488,6 +546,12 @@ button:hover {
   padding: 12px;
   display: grid;
   gap: 8px;
+}
+
+.stock-details-page .compare-box {
+  background: #ecf7f9;
+  border: 1px solid #cfe3e6;
+  color: #000;
 }
 
 .dashboard-page {
