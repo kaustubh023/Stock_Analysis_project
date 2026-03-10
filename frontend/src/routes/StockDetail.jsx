@@ -93,12 +93,12 @@ function StockDetailPage() {
             <DetailMetric label="Price" value={formatCurrency(stockAnalytics.metrics.current_price)} subtitle="Latest traded price" tone="neutral" mono />
             <DetailMetric label="Min Price" value={formatCurrency(stockAnalytics.metrics.min_price)} subtitle="1Y lowest close" tone="neg" mono />
             <DetailMetric label="Max Price" value={formatCurrency(stockAnalytics.metrics.max_price)} subtitle="1Y highest close" tone="pos" mono />
-            <DetailMetric label="PE Ratio" value={stockAnalytics.metrics.pe_ratio} subtitle="Price to earnings multiple" tone="neutral" mono />
+            <DetailMetric label="PE Ratio" value={formatPERatio(stockAnalytics.metrics.pe_ratio)} subtitle="Price to earnings multiple" tone="neutral" mono />
             <DetailMetric label="MarketCap" value={formatMarketCap(stockAnalytics.metrics.market_cap)} subtitle="Total market capitalization" tone="neutral" mono />
             <DetailMetric label="Intrinsic" value={formatCurrency(stockAnalytics.metrics.intrinsic)} subtitle="Estimated fair value" tone="neutral" mono />
             <DetailMetric
               label="Discount%"
-              value={`${stockAnalytics.metrics.discount_pct}%`}
+              value={formatDiscount(stockAnalytics.metrics.discount_pct)}
               subtitle="Vs intrinsic value"
               tone={Number(stockAnalytics.metrics.discount_pct) >= 0 ? "pos" : "neg"}
               mono
@@ -151,6 +151,16 @@ function formatMarketCap(value) {
   if (n >= 1e6) return `₹${(n / 1e6).toFixed(2)}M`;
   if (n >= 1e3) return `₹${(n / 1e3).toFixed(2)}K`;
   return `₹${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+}
+
+function formatPERatio(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n.toFixed(2) : "N/A";
+}
+
+function formatDiscount(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${n.toFixed(2)}%` : "N/A";
 }
 
 function DetailMetric({ label, value, subtitle, tone = "neutral", mono = false }) {

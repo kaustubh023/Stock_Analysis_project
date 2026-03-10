@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 import math
+import os
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 import numpy as np
@@ -56,6 +57,7 @@ _CLUSTER_CACHE_TTL_SECONDS = 900
 _CLUSTER_FAIL_CACHE_TTL_SECONDS = 60
 _PE_CACHE: dict[str, tuple[float, list[dict]]] = {}
 _PE_CACHE_TTL_SECONDS = 120
+_PE_CACHE_VERSION = 2
 _RISK_CACHE: dict[str, tuple[float, dict]] = {}
 _RISK_CACHE_TTL_SECONDS = 120
 _TREND_CACHE_TTL_SECONDS = 600
@@ -76,6 +78,122 @@ def _is_network_block_error(exc: Exception) -> bool:
         "timed out",
     ]
     return any(marker in message for marker in markers)
+
+def _env(key: str) -> str:
+    try:
+        return os.environ.get(key) or ""
+    except Exception:
+        return ""
+
+def _split_symbol_exchange(symbol: str):
+    s = (symbol or "").strip().upper()
+    if "." in s:
+        base, ext = s.split(".", 1)
+        exch = "NSE" if ext == "NS" else ("BSE" if ext == "BO" else ext)
+        return base, exch
+    return s, None
+
+def _to_twelve_symbol(symbol: str):
+    base, exch = _split_symbol_exchange(symbol)
+    if exch in {"NSE", "BSE"}:
+        return f"{base}:{exch}"
+    return base
+
+def _twelve_interval(interval: str) -> str:
+    mapping = {"1d": "1day", "1wk": "1week", "1mo": "1month", "60m": "1h", "30m": "30min", "15m": "15min"}
+    return mapping.get((interval or "").strip(), "1day")
+
+def _period_to_outputsize(period: str) -> int:
+    p = (period or "").strip()
+    return {
+        "1mo": 22,
+        "3mo": 66,
+        "6mo": 132,
+        "1y": 264,
+        "2y": 528,
+        "5y": 1320,
+    }.get(p, 264)
+
+def _fetch_history_twelve(symbol: str, period: str = "1y", interval: str = "1d"):
+    apikey = _env("TWELVE_API_KEY")
+    if not apikey:
+        return pd.DataFrame()
+    try:
+        sym = quote_plus(_to_twelve_symbol(symbol))
+        intv = _twelve_interval(interval)
+        osize = _period_to_outputsize(period)
+        url = f"https://api.twelvedata.com/time_series?symbol={sym}&interval={intv}&outputsize={osize}&format=JSON&timezone=UTC&apikey={quote_plus(apikey)}"
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=5) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        values = (payload or {}).get("values") or []
+        if not values:
+            return pd.DataFrame()
+        dates = []
+        closes = []
+        volumes = []
+        for row in values:
+            try:
+                dates.append(pd.to_datetime(row.get("datetime")))
+                closes.append(float(row.get("close")))
+                volumes.append(float(row.get("volume")) if row.get("volume") is not None else np.nan)
+            except Exception:
+                continue
+        if not dates or not closes:
+            return pd.DataFrame()
+        df = pd.DataFrame({"Close": closes, "Volume": volumes}, index=pd.DatetimeIndex(dates))
+        df = df.sort_index()
+        return _normalize_history_df(df, symbol=symbol)
+    except Exception:
+        return pd.DataFrame()
+
+def _fetch_finnhub_quote(symbol: str) -> dict:
+    token = _env("FINNHUB_API_KEY")
+    if not token:
+        return {}
+    try:
+        s = quote_plus(symbol)
+        url = f"https://finnhub.io/api/v1/quote?symbol={s}&token={quote_plus(token)}"
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=4) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        if not isinstance(payload, dict):
+            return {}
+        out = {}
+        c = _safe_float(payload.get("c"), default=np.nan)
+        pc = _safe_float(payload.get("pc"), default=np.nan)
+        if not np.isnan(c) and c > 0:
+            out["regularMarketPrice"] = float(c)
+        if not np.isnan(pc) and pc > 0:
+            out["regularMarketPreviousClose"] = float(pc)
+        return out
+    except Exception:
+        return {}
+
+def _fetch_finnhub_metrics(symbol: str) -> dict:
+    token = _env("FINNHUB_API_KEY")
+    if not token:
+        return {}
+    try:
+        s = quote_plus(symbol)
+        url = f"https://finnhub.io/api/v1/stock/metric?symbol={s}&metric=all&token={quote_plus(token)}"
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=5) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        metric = (payload or {}).get("metric") or {}
+        out = {}
+        pe = _safe_float(metric.get("peNormalizedAnnual") or metric.get("peTTM") or metric.get("peExclExtraTTM"), default=np.nan)
+        eps_ttm = _safe_float(metric.get("epsTTM"), default=np.nan)
+        mcap = _safe_float(metric.get("marketCapitalization"), default=np.nan)
+        if not np.isnan(pe) and pe > 0:
+            out["trailingPE"] = float(pe)
+        if not np.isnan(eps_ttm) and eps_ttm > 0:
+            out["epsTrailingTwelveMonths"] = float(eps_ttm)
+        if not np.isnan(mcap) and mcap > 0:
+            out["marketCap"] = float(mcap)
+        return out
+    except Exception:
+        return {}
 
 
 def _is_yahoo_temporarily_blocked() -> bool:
@@ -160,6 +278,10 @@ def _normalize_history_df(df: pd.DataFrame | None, symbol: str | None = None):
 
 
 def _fetch_history(symbol: str, period: str = "1y", interval: str = "1d"):
+    # Prefer external provider if configured
+    hist = _fetch_history_twelve(symbol, period=period, interval=interval)
+    if hist is not None and not hist.empty:
+        return hist
     if _is_yahoo_temporarily_blocked():
         return pd.DataFrame()
 
@@ -225,9 +347,28 @@ def _fetch_history(symbol: str, period: str = "1y", interval: str = "1d"):
 
 
 def _fetch_quote_map(symbols: list[str]):
-    # Batch quote endpoint to reduce expensive per-symbol info pulls.
+    # Try external provider first if available.
     if not symbols or _is_yahoo_temporarily_blocked():
         return {}
+    symbols = [str(s).strip().upper() for s in symbols if str(s).strip()]
+    out: dict[str, dict] = {}
+    token = _env("FINNHUB_API_KEY")
+    if token:
+        for s in symbols:
+            try:
+                q = _fetch_finnhub_quote(s)
+                m = _fetch_finnhub_metrics(s)
+                if q or m:
+                    row = {}
+                    row.update(q)
+                    row.update(m)
+                    out[s] = row
+            except Exception:
+                continue
+        missing_after_ext = [s for s in symbols if s not in out]
+        symbols = missing_after_ext or []
+        if not symbols:
+            return out
     try:
         symbol_list = ",".join(symbols)
         url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={quote_plus(symbol_list)}"
@@ -235,17 +376,134 @@ def _fetch_quote_map(symbols: list[str]):
         with urlopen(req, timeout=4) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
         rows = (((payload or {}).get("quoteResponse") or {}).get("result")) or []
-        out = {}
         for row in rows:
             sym = (row.get("symbol") or "").strip().upper()
-            if sym:
+            if sym and sym not in out:
                 out[sym] = row
-        return out
     except Exception as exc:
         if _is_network_block_error(exc):
             _mark_yahoo_temporarily_blocked()
-        return {}
+    # Fallback: fetch any missing symbols individually with short timeouts
+    missing = [s for s in symbols if s not in out]
+    for s in missing:
+        try:
+            url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={quote_plus(s)}"
+            req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(req, timeout=3) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            rows = (((payload or {}).get("quoteResponse") or {}).get("result")) or []
+            for row in rows:
+                sym = (row.get("symbol") or "").strip().upper()
+                if sym:
+                    out[sym] = row
+        except Exception as exc:
+            if _is_network_block_error(exc):
+                _mark_yahoo_temporarily_blocked()
+            continue
+    return out
 
+def _compute_pe_yf(symbol: str) -> float | None:
+    try:
+        if _is_yahoo_temporarily_blocked():
+            raise RuntimeError("yahoo temporarily blocked")
+        tkr = yf.Ticker(symbol)
+        fast = {}
+        info = {}
+        try:
+            fast = dict(tkr.fast_info or {})
+        except Exception as exc:
+            if _is_network_block_error(exc):
+                _mark_yahoo_temporarily_blocked()
+        try:
+            info = tkr.info or {}
+        except Exception as exc:
+            if _is_network_block_error(exc):
+                _mark_yahoo_temporarily_blocked()
+        pe = _safe_float(
+            fast.get("trailingPE")
+            or fast.get("forwardPE")
+            or info.get("trailingPE")
+            or info.get("forwardPE"),
+            default=np.nan,
+        )
+        if not np.isnan(pe) and pe > 0:
+            return float(pe)
+        eps = _safe_float(
+            info.get("trailingEps")
+            or fast.get("epsTrailingTwelveMonths"),
+            default=np.nan,
+        )
+        price = _safe_float(
+            fast.get("lastPrice")
+            or fast.get("regularMarketPrice")
+            or info.get("currentPrice")
+            or info.get("regularMarketPrice"),
+            default=np.nan,
+        )
+        if eps > 0 and not np.isnan(price):
+            return float(price / eps)
+    except Exception as exc:
+        if _is_network_block_error(exc):
+            _mark_yahoo_temporarily_blocked()
+    return None
+
+def _compute_eps_from_income_shares(symbol: str) -> float | None:
+    try:
+        if _is_yahoo_temporarily_blocked():
+            raise RuntimeError("yahoo temporarily blocked")
+        tkr = yf.Ticker(symbol)
+        info = {}
+        try:
+            info = tkr.info or {}
+        except Exception as exc:
+            if _is_network_block_error(exc):
+                _mark_yahoo_temporarily_blocked()
+            info = {}
+        shares = _safe_float(info.get("sharesOutstanding"), default=np.nan)
+        if np.isnan(shares) or shares <= 0:
+            try:
+                gf = tkr.get_shares_full()
+                if gf is not None and len(gf) > 0:
+                    shares = _safe_float(gf.dropna().iloc[-1], default=np.nan)
+            except Exception:
+                pass
+        qdf = None
+        try:
+            qdf = tkr.get_income_stmt(freq="quarterly")
+        except Exception:
+            qdf = None
+        if qdf is None or len(qdf) == 0:
+            try:
+                qdf = tkr.quarterly_financials
+            except Exception:
+                qdf = None
+        net_income_ttm = np.nan
+        if qdf is not None and len(qdf) > 0:
+            idx = [str(x).lower() for x in list(qdf.index)]
+            candidates = ["net income", "netincome", "net income applicable to common shares", "net income common stockholders"]
+            ni_row = None
+            for i, name in enumerate(idx):
+                for c in candidates:
+                    if c in name:
+                        ni_row = qdf.iloc[i]
+                        break
+                if ni_row is not None:
+                    break
+            if ni_row is None and "Net Income" in qdf.index:
+                ni_row = qdf.loc["Net Income"]
+            if ni_row is not None is not None:
+                vals = pd.to_numeric(ni_row, errors="coerce").dropna()
+                if len(vals) >= 1:
+                    s = float(vals.iloc[:4].sum()) if len(vals) >= 4 else float(vals.sum())
+                    net_income_ttm = s
+        if (not np.isnan(net_income_ttm)) and shares and shares > 0:
+            eps = net_income_ttm / shares
+            if eps > 0:
+                return float(eps)
+    except Exception as exc:
+        if _is_network_block_error(exc):
+            _mark_yahoo_temporarily_blocked()
+    return None
 
 def _normalize_symbol_for_trend(symbol: str):
     base_symbol = (symbol or "").strip().upper()
@@ -511,11 +769,34 @@ def fetch_stock_metrics(symbol: str):
     ticker = yf.Ticker(symbol) if not _is_yahoo_temporarily_blocked() else None
     history = _fetch_history(symbol, period="1y", interval="1d")
     if history.empty:
+        # Extra fallback: use the robust close-series fetcher from forecast.utils
+        try:
+            from forecast.utils import fetch_history_close_series  # type: ignore
+            series = fetch_history_close_series(symbol, period="1y", interval="1d")
+            if series is not None and not series.empty:
+                history = pd.DataFrame({"Close": series, "Volume": np.nan})
+        except Exception:
+            pass
+    if history.empty:
         if cached and cached_price > 0:
             return cached_payload
+        # As a final, non-blocking fallback, synthesize a short flat history from quote price
+        try:
+            quote_map = _fetch_quote_map([symbol])
+            qr = quote_map.get(symbol, {}) or {}
+            px = _safe_float(qr.get("regularMarketPrice") or qr.get("regularMarketPreviousClose"), default=np.nan)
+            if not np.isnan(px) and px > 0:
+                dates = pd.bdate_range(end=pd.Timestamp.utcnow().normalize(), periods=60)
+                history = pd.DataFrame({"Close": float(px), "Volume": np.nan}, index=dates)
+        except Exception:
+            pass
+    if history.empty:
         raise ValueError("Unable to fetch stock data right now (Yahoo rate-limit or network issue). Please retry in a few seconds.")
 
     info = {}
+    fast = {}
+    ext_metrics = _fetch_finnhub_metrics(symbol) if _env("FINNHUB_API_KEY") else {}
+    ext_quote = _fetch_finnhub_quote(symbol) if _env("FINNHUB_API_KEY") else {}
     if ticker is not None:
         try:
             info = ticker.info or {}
@@ -523,8 +804,19 @@ def fetch_stock_metrics(symbol: str):
             if _is_network_block_error(exc):
                 _mark_yahoo_temporarily_blocked()
             info = {}
+        try:
+            fast = dict(ticker.fast_info or {})
+        except Exception as exc:
+            if _is_network_block_error(exc):
+                _mark_yahoo_temporarily_blocked()
+            fast = {}
     quote_map = _fetch_quote_map([symbol])
     quote_row = quote_map.get(symbol, {})
+    # Merge external provider fields (if any) with quote row as highest priority
+    if ext_metrics:
+        quote_row = {**quote_row, **ext_metrics}
+    if ext_quote:
+        quote_row = {**quote_row, **ext_quote}
 
     history = history.dropna(subset=["Close"]).copy()
     if history.empty:
@@ -544,49 +836,83 @@ def fetch_stock_metrics(symbol: str):
         )
 
     pe_ratio = _safe_float(
-        info.get("trailingPE")
+        quote_row.get("trailingPE")
+        or quote_row.get("forwardPE")
+        or info.get("trailingPE")
         or info.get("forwardPE")
-        or quote_row.get("trailingPE")
-        or quote_row.get("forwardPE"),
+        or fast.get("trailingPE")
+        or fast.get("forwardPE"),
         default=np.nan,
     )
-    eps = _safe_float(info.get("trailingEps") or quote_row.get("epsTrailingTwelveMonths"), default=np.nan)
-    market_cap = _safe_float(info.get("marketCap") or quote_row.get("marketCap"), default=np.nan)
+    eps = _safe_float(
+        quote_row.get("epsTrailingTwelveMonths")
+        or info.get("trailingEps")
+        or fast.get("epsTrailingTwelveMonths"),
+        default=np.nan,
+    )
+    market_cap = _safe_float(quote_row.get("marketCap") or info.get("marketCap"), default=np.nan)
 
-    if np.isnan(pe_ratio) or pe_ratio <= 0:
-        pe_ratio = _safe_float(current_price / eps, default=15.0) if eps > 0 else 15.0
+    if (np.isnan(pe_ratio) or pe_ratio <= 0) and eps > 0:
+        pe_ratio = _safe_float(current_price / eps, default=np.nan)
+    if (np.isnan(eps) or eps <= 0) and pe_ratio and not np.isnan(pe_ratio) and pe_ratio > 0:
+        eps = _safe_float(current_price / pe_ratio, default=np.nan)
 
     # Ensure EPS is usable even when fundamentals are unavailable/rate-limited.
-    if np.isnan(eps) or eps <= 0:
-        eps = _safe_float(current_price / pe_ratio, default=0.0) if pe_ratio > 0 else 0.0
-    if eps <= 0:
-        eps = _safe_float(current_price / 15.0, default=0.01)
+    if (np.isnan(eps) or eps <= 0) and pe_ratio and not np.isnan(pe_ratio) and pe_ratio > 0:
+        eps = _safe_float(current_price / pe_ratio, default=np.nan)
+    # Extra fallback: try direct yfinance PE fetch if still missing
+    if (np.isnan(pe_ratio) or pe_ratio <= 0):
+        try:
+            alt = _compute_pe_yf(symbol)
+            if alt is not None and alt > 0:
+                pe_ratio = float(alt)
+                if (np.isnan(eps) or eps <= 0) and current_price > 0:
+                    eps = _safe_float(current_price / pe_ratio, default=np.nan)
+        except Exception:
+            pass
+    if (np.isnan(pe_ratio) or pe_ratio <= 0):
+        try:
+            eps_est = _compute_eps_from_income_shares(symbol)
+            if eps_est is not None and eps_est > 0 and current_price > 0:
+                eps = _safe_float(eps, default=np.nan)
+                if np.isnan(eps) or eps <= 0:
+                    eps = float(eps_est)
+                pe_ratio = _safe_float(current_price / eps, default=np.nan)
+        except Exception:
+            pass
 
-    intrinsic = max(eps * 18, 0.01)
-    discount_pct = ((intrinsic - current_price) / intrinsic) * 100
+    intrinsic = (eps * 18.0) if (not np.isnan(eps) and eps > 0) else (
+        current_price * (18.0 / pe_ratio) if (pe_ratio and not np.isnan(pe_ratio) and pe_ratio > 0) else current_price
+    )
+    intrinsic = max(_safe_float(intrinsic, default=current_price), 0.01)
+    discount_pct = ((intrinsic - current_price) / intrinsic) * 100 if intrinsic > 0 else 0.0
 
-    if discount_pct >= 25:
+    if (not np.isnan(eps)) and eps > 0 and discount_pct >= 25:
         opportunity = "High"
-    elif discount_pct >= 10:
+    elif (not np.isnan(eps)) and eps > 0 and discount_pct >= 10:
         opportunity = "Medium"
     else:
         opportunity = "Low"
 
-    history["pe"] = history["Close"].apply(lambda px: (px / eps) if eps > 0 else np.nan)
+    history["pe"] = history["Close"].apply(lambda px: (px / eps) if (not np.isnan(eps) and eps > 0) else np.nan)
     history["discount"] = ((intrinsic - history["Close"]) / intrinsic) * 100
     history["opportunity"] = intrinsic - history["Close"]
 
+    pe_out = _safe_float(pe_ratio, default=np.nan)
+    pe_out = None if (np.isnan(pe_out) or pe_out <= 0) else round(float(pe_out), 2)
+    eps_out = _safe_float(eps, default=np.nan)
+    eps_out = None if (np.isnan(eps_out) or eps_out <= 0) else round(float(eps_out), 2)
     metrics = {
         "symbol": symbol,
         "company": info.get("longName") or info.get("shortName") or quote_row.get("longName") or quote_row.get("shortName") or symbol,
-        "pe_ratio": round(pe_ratio, 2),
+        "pe_ratio": pe_out,
         "min_price": round(min_price, 2),
         "max_price": round(max_price, 2),
         "current_price": round(current_price, 2),
-        "eps": round(eps, 2),
+        "eps": eps_out,
         "market_cap": int(market_cap) if not np.isnan(market_cap) else None,
         "intrinsic": round(intrinsic, 2),
-        "discount_pct": round(discount_pct, 2),
+        "discount_pct": round(_safe_float(discount_pct, default=0.0), 2),
         "opportunity": opportunity,
     }
 
@@ -607,97 +933,173 @@ def fetch_stock_metrics(symbol: str):
 
 
 def portfolio_pe_comparison(symbols: list[str]):
-    output = []
+    output: list[dict] = []
     if not symbols:
         return output
     symbols = [str(s).strip().upper() for s in symbols if str(s).strip()]
-    cache_key = ",".join(sorted(symbols))
+    cache_key = f"v{_PE_CACHE_VERSION}|" + ",".join(sorted(symbols))
     now = time.time()
     cached = _PE_CACHE.get(cache_key)
     if cached and (now - cached[0]) <= _PE_CACHE_TTL_SECONDS:
         return cached[1]
 
-    latest_close = {}
-    hist = _fetch_history(" ".join(symbols), period="7d", interval="1d")
-    if hist is not None and not hist.empty:
-        try:
-            if isinstance(hist.columns, pd.MultiIndex):
-                lvl0 = list(hist.columns.get_level_values(0))
-                lvl1 = list(hist.columns.get_level_values(1))
-                for symbol in symbols:
-                    sub = None
-                    if symbol in lvl1:
-                        sub = hist.xs(symbol, axis=1, level=1)
-                    elif symbol in lvl0:
-                        sub = hist.xs(symbol, axis=1, level=0)
-                    if sub is not None and "Close" in sub.columns:
-                        close = sub["Close"].dropna()
-                        if not close.empty:
-                            latest_close[symbol] = _safe_float(close.iloc[-1], default=np.nan)
-            elif "Close" in hist.columns and len(symbols) == 1:
-                close = hist["Close"].dropna()
-                if not close.empty:
-                    latest_close[symbols[0]] = _safe_float(close.iloc[-1], default=np.nan)
-        except Exception:
-            latest_close = {}
+    latest_close: dict[str, float] = {}
 
     quote_map = _fetch_quote_map(symbols)
 
     for symbol in symbols:
         pe = np.nan
         eps = np.nan
-        close_px = latest_close.get(symbol, np.nan)
-        qrow = quote_map.get(symbol, {})
-        pe = _safe_float(qrow.get("trailingPE") or qrow.get("forwardPE"), default=np.nan)
-        eps = _safe_float(qrow.get("epsTrailingTwelveMonths"), default=np.nan)
-        if np.isnan(close_px):
-            close_px = _safe_float(
-                qrow.get("regularMarketPrice") or qrow.get("regularMarketPreviousClose"),
-                default=np.nan,
-            )
+        disc = None
+        qrow = quote_map.get(symbol, {}) or {}
+        # Prefer quote endpoint values first (fast and symbol-specific)
+        close_px = _safe_float(
+            qrow.get("regularMarketPrice") or qrow.get("regularMarketPreviousClose"),
+            default=np.nan,
+        )
+        eps = _safe_float(
+            qrow.get("epsTrailingTwelveMonths") or qrow.get("trailingEps"),
+            default=np.nan,
+        )
+        pe = _safe_float(
+            (qrow.get("trailingPE") if qrow.get("trailingPE") is not None else qrow.get("forwardPE")),
+            default=np.nan,
+        )
+        if np.isnan(pe) and eps > 0 and not np.isnan(close_px):
+            pe = _safe_float(close_px / eps, default=np.nan)
         try:
             if _is_yahoo_temporarily_blocked():
                 raise RuntimeError("yahoo temporarily blocked")
             ticker = yf.Ticker(symbol)
-            info = ticker.info or {}
+            tkr = yf.Ticker(symbol)
             fast = {}
+            info = {}
             try:
-                fast = dict(ticker.fast_info or {})
+                fast = dict(tkr.fast_info or {})
             except Exception as exc:
                 if _is_network_block_error(exc):
                     _mark_yahoo_temporarily_blocked()
-                fast = {}
-
-            if np.isnan(pe):
-                pe = _safe_float(
-                    info.get("trailingPE")
-                    or info.get("forwardPE")
-                    or fast.get("trailingPE")
-                    or fast.get("forwardPE"),
+            try:
+                info = tkr.info or {}
+            except Exception as exc:
+                if _is_network_block_error(exc):
+                    _mark_yahoo_temporarily_blocked()
+            yf_pe = _safe_float(
+                fast.get("trailingPE")
+                or fast.get("forwardPE")
+                or info.get("trailingPE")
+                or info.get("forwardPE"),
+                default=np.nan,
+            )
+            if np.isnan(yf_pe):
+                yf_eps = _safe_float(
+                    info.get("trailingEps")
+                    or fast.get("epsTrailingTwelveMonths"),
                     default=np.nan,
                 )
-            if np.isnan(eps):
-                eps = _safe_float(info.get("trailingEps") or fast.get("epsTrailingTwelveMonths"), default=np.nan)
-            if np.isnan(close_px):
-                close_px = _safe_float(
+                yf_price = _safe_float(
                     fast.get("lastPrice")
                     or fast.get("regularMarketPrice")
-                    or fast.get("previousClose"),
+                    or info.get("currentPrice")
+                    or info.get("regularMarketPrice"),
                     default=np.nan,
                 )
-            if np.isnan(pe) and eps > 0 and not np.isnan(close_px):
-                pe = _safe_float(close_px / eps, default=np.nan)
+                if yf_eps > 0 and not np.isnan(yf_price):
+                    yf_pe = _safe_float(yf_price / yf_eps, default=np.nan)
+            # Prefer yfinance-derived value when available
+            if not np.isnan(yf_pe) and yf_pe > 0:
+                pe = yf_pe
+            else:
+                # Otherwise, fill remaining missing inputs from yfinance
+                if np.isnan(eps):
+                    eps = _safe_float(
+                        info.get("trailingEps")
+                        or fast.get("epsTrailingTwelveMonths"),
+                        default=np.nan,
+                    )
+                if np.isnan(close_px):
+                    close_px = _safe_float(
+                        fast.get("lastPrice")
+                        or fast.get("regularMarketPrice")
+                        or info.get("currentPrice")
+                        or info.get("regularMarketPrice"),
+                        default=np.nan,
+                    )
+                if np.isnan(pe) and eps > 0 and not np.isnan(close_px):
+                    pe = _safe_float(close_px / eps, default=np.nan)
+            # Final strict per-symbol check (ensures unique PEs if batch data was stale)
+            best = _compute_pe_yf(symbol)
+            if best is not None and best > 0:
+                pe = float(best)
         except Exception as exc:
             if _is_network_block_error(exc):
                 _mark_yahoo_temporarily_blocked()
             pass
+        # Final defensive fallback: use analytics to compute PE and discount% when still unavailable
+        if np.isnan(pe) or pe <= 0:
+            try:
+                metrics = fetch_stock_metrics(symbol).get("metrics", {})
+                m_pe = _safe_float(metrics.get("pe_ratio"), default=np.nan)
+                if not np.isnan(m_pe) and m_pe > 0:
+                    pe = m_pe
+                dval = _safe_float(metrics.get("discount_pct"), default=np.nan)
+                if not np.isnan(dval):
+                    disc = round(float(dval), 2)
+            except Exception:
+                pass
+        # Ensure discount is available even if PE came from quotes
+        if disc is None:
+            try:
+                metrics = fetch_stock_metrics(symbol).get("metrics", {})
+                dval = _safe_float(metrics.get("discount_pct"), default=np.nan)
+                if not np.isnan(dval):
+                    disc = round(float(dval), 2)
+            except Exception:
+                pass
 
         output.append(
             {
                 "symbol": symbol,
                 "pe_ratio": round(float(pe), 2) if not np.isnan(pe) and pe > 0 else None,
+                "discount_pct": disc,
             }
         )
+    # Detect pathological case: identical non-null PE for all symbols; recompute with per-symbol quotes
+    unique_values = set([row["pe_ratio"] for row in output])
+    if len(unique_values) == 1 and (list(unique_values)[0] is not None) and len(symbols) > 1:
+        strict_quote_map = {}
+        for s in symbols:
+            strict_quote_map.update(_fetch_quote_map([s]))
+        strict_output = []
+        for s in symbols:
+            qrow = strict_quote_map.get(s, {}) or {}
+            pe = _safe_float(qrow.get("trailingPE") or qrow.get("forwardPE"), default=np.nan)
+            if np.isnan(pe):
+                close_px = _safe_float(qrow.get("regularMarketPrice") or qrow.get("regularMarketPreviousClose"), default=np.nan)
+                eps = _safe_float(qrow.get("epsTrailingTwelveMonths") or qrow.get("trailingEps"), default=np.nan)
+                if eps > 0 and not np.isnan(close_px):
+                    pe = _safe_float(close_px / eps, default=np.nan)
+            # We do not compute discount here; keep behavior focused on PE for the chart
+            strict_output.append({"symbol": s, "pe_ratio": round(float(pe), 2) if not np.isnan(pe) and pe > 0 else None})
+        output = strict_output
+    # If all PE values are still unavailable, make a final pass using analytics for each symbol
+    if all((row.get("pe_ratio") is None) for row in output) and symbols:
+        recovered = []
+        for s in symbols:
+            pe_val = None
+            disc_val = None
+            try:
+                metrics = fetch_stock_metrics(s).get("metrics", {})
+                m_pe = _safe_float(metrics.get("pe_ratio"), default=np.nan)
+                if not np.isnan(m_pe) and m_pe > 0:
+                    pe_val = round(float(m_pe), 2)
+                dval = _safe_float(metrics.get("discount_pct"), default=np.nan)
+                if not np.isnan(dval):
+                    disc_val = round(float(dval), 2)
+            except Exception:
+                pass
+            recovered.append({"symbol": s, "pe_ratio": pe_val, "discount_pct": disc_val})
+        output = recovered
     _PE_CACHE[cache_key] = (now, output)
     return output
 

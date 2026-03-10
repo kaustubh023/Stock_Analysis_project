@@ -49,14 +49,16 @@ function DashboardPage() {
         const key = symbol.toUpperCase();
         const row = bySymbol.get(key);
         const pe = Number(row?.pe_ratio);
+        const disc = Number(row?.discount_pct);
         return {
           symbol: key,
           pe_ratio: Number.isFinite(pe) && pe > 0 ? Number(pe.toFixed(2)) : null,
+          discount_pct: Number.isFinite(disc) ? Number(disc.toFixed(2)) : null,
         };
       });
       setPeComparison(orderedRows);
     } catch {
-      setPeComparison(symbols.map((symbol) => ({ symbol: symbol.toUpperCase(), pe_ratio: null })));
+      setPeComparison(symbols.map((symbol) => ({ symbol: symbol.toUpperCase(), pe_ratio: null, discount_pct: null })));
     }
   };
 
@@ -293,7 +295,16 @@ function DashboardPage() {
                 }
               >
                 <div>{stock.company_name}</div>
-                <small>{stock.symbol} | {stock.sector} | {stock.portfolio_type_name}</small>
+                {(() => {
+                  const row = peComparison.find((r) => String(r.symbol).toUpperCase() === String(stock.symbol).toUpperCase());
+                  const peTxt = Number.isFinite(Number(row?.pe_ratio)) ? Number(row.pe_ratio).toFixed(2) : "N/A";
+                  const discTxt = Number.isFinite(Number(row?.discount_pct)) ? `${Number(row.discount_pct).toFixed(2)}%` : "N/A";
+                  return (
+                    <small>
+                      {stock.symbol} | {stock.sector} | {stock.portfolio_type_name} | PE: {peTxt} | Discount: {discTxt}
+                    </small>
+                  );
+                })()}
               </button>
             ))}
             {stocks.length === 0 && <p>No stocks yet.</p>}
