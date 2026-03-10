@@ -10,11 +10,12 @@ import {
   YAxis,
 } from "recharts";
 import api from "../api";
+import AppShell from "../components/AppShell";
 import { useAuth } from "../context/AuthContext";
 
 function DashboardPage() {
   const navigate = useNavigate();
-  const { username, logout: clearAuth } = useAuth();
+  const { username } = useAuth();
   const [portfolioTypes, setPortfolioTypes] = useState([]);
   const [stocks, setStocks] = useState([]);
   const [peComparison, setPeComparison] = useState([]);
@@ -177,11 +178,6 @@ function DashboardPage() {
     setMessage("");
   };
 
-  const logout = () => {
-    clearAuth();
-    navigate("/login", { replace: true });
-  };
-
   const stockSymbols = useMemo(() => [...new Set(stocks.map((s) => s.symbol))], [stocks]);
   const peComparisonChartData = useMemo(
     () =>
@@ -200,87 +196,145 @@ function DashboardPage() {
     () => peComparisonChartData.filter((row) => !row.pe_available).map((row) => row.symbol),
     [peComparisonChartData]
   );
+  const averagePe = useMemo(() => {
+    const values = peComparisonChartData
+      .map((row) => Number(row.pe_ratio))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (!values.length) return "N/A";
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  }, [peComparisonChartData]);
+  const sectorsTracked = useMemo(() => new Set(stocks.map((stock) => stock.sector).filter(Boolean)).size, [stocks]);
+  const topDiscount = useMemo(() => {
+    const ranked = (peComparison || [])
+      .filter((row) => Number.isFinite(Number(row.discount_pct)))
+      .sort((a, b) => Number(b.discount_pct) - Number(a.discount_pct));
+    return ranked[0] || null;
+  }, [peComparison]);
+  const selectedTypeName = useMemo(() => {
+    const match = portfolioTypes.find((item) => String(item.id) === String(selectedType));
+    return match?.name || "No portfolio selected";
+  }, [portfolioTypes, selectedType]);
 
   return (
-    <div className="page dashboard-page">
-      <header className="topbar dashboard-topbar">
-        <div>
-          <p className="dashboard-brand mono"><span className="pulse-dot" /> AutoVest Analytics</p>
-          <h2>Welcome, {username}</h2>
-          <p>Your portfolio and analytics workspace</p>
-        </div>
-        <div className="inline">
-          <button onClick={() => navigate("/explore")}>Explore</button>
-          <button onClick={() => navigate("/other-features")}>Other Features</button>
-          <button onClick={() => navigate("/clusters")}>Cluster Lab</button>
-          <button onClick={logout}>Logout</button>
-        </div>
-      </header>
+    <AppShell
+      eyebrow="Portfolio Command Center"
+      title={`Welcome back, ${username}`}
+      subtitle="Track portfolio quality, add new positions, and jump into deeper analytics from one workspace."
+      actions={(
+        <>
+          <button className="ghost-button" onClick={() => navigate("/explore")}>Explore stocks</button>
+          <button className="ghost-button" onClick={() => navigate("/other-features")}>Feature hub</button>
+        </>
+      )}
+    >
+      <section className="stat-strip">
+        <article className="stat-tile">
+          <span className="stat-label mono">Portfolios</span>
+          <strong>{portfolioTypes.length}</strong>
+          <small>{selectedTypeName}</small>
+        </article>
+        <article className="stat-tile">
+          <span className="stat-label mono">Tracked stocks</span>
+          <strong>{stocks.length}</strong>
+          <small>{sectorsTracked} sectors mapped</small>
+        </article>
+        <article className="stat-tile">
+          <span className="stat-label mono">Average PE</span>
+          <strong>{averagePe === "N/A" ? averagePe : averagePe.toFixed(2)}</strong>
+          <small>Across available portfolio names</small>
+        </article>
+        <article className="stat-tile">
+          <span className="stat-label mono">Best discount</span>
+          <strong>{topDiscount ? topDiscount.symbol : "N/A"}</strong>
+          <small>{topDiscount ? `${Number(topDiscount.discount_pct).toFixed(2)}% vs intrinsic` : "No discount data yet"}</small>
+        </article>
+      </section>
 
-      <section className="grid two">
-        <div className="card">
-          <h3>Create Portfolio Name</h3>
-          <div className="inline">
-            <input value={newType} onChange={(e) => setNewType(e.target.value)} placeholder="e.g. Long Term Wealth" />
-            <button onClick={addPortfolioType}>Create</button>
+      <section className="content-grid content-grid-dashboard">
+        <div className="card card-highlight">
+          <div className="section-head">
+            <div>
+              <span className="section-kicker mono">Build portfolio</span>
+              <h3>Create and populate a portfolio</h3>
+            </div>
+            <span className="chip">{selectedTypeName}</span>
           </div>
-          {!hasPortfolioType && <p className="note">Create portfolio name first to continue.</p>}
 
-          <h3>Add Stock</h3>
-          <p className="note">Step 1: Enter sector manually</p>
-          <input
-            value={sector}
-            onChange={(e) => setSector(e.target.value)}
-            placeholder={selectedType ? "e.g. Banking, IT, Pharma" : "Create/select portfolio first"}
-            disabled={!hasPortfolioType || !selectedType}
-          />
+          <div className="form-stack">
+            <div className="input-group">
+              <label>Portfolio name</label>
+              <div className="inline inline-compact">
+                <input value={newType} onChange={(e) => setNewType(e.target.value)} placeholder="e.g. Long Term Wealth" />
+                <button onClick={addPortfolioType}>Create</button>
+              </div>
+              {!hasPortfolioType && <p className="note">Create your first portfolio name to unlock stock selection.</p>}
+            </div>
 
-          <p className="note">Step 2: Search Indian stock (starts with)</p>
-          <div ref={searchBoxRef}>
-            <input
-              value={query}
-              onFocus={() => {
-                if (selectedType && query.length >= 1) {
-                  setShowSuggestions(true);
-                }
-              }}
-              onChange={(e) => {
-                setSelectedSuggestion(null);
-                setQuery(e.target.value);
-              }}
-              placeholder={selectedType ? 'Type "a", "as", ticker, etc.' : "Create/select portfolio first"}
-              disabled={!hasPortfolioType || !selectedType}
-            />
-            {showSuggestions && selectedType && query.length >= 1 && (
-              <div className="suggestions">
-                {suggestions.length > 0 ? (
-                  suggestions.map((s) => (
-                    <button
-                      key={s.symbol}
-                      className="suggestion"
-                      onClick={() => {
-                        setSelectedSuggestion(s);
-                        setQuery(`${s.symbol} - ${s.name} (${s.exchange})`);
-                        setShowSuggestions(false);
-                      }}
-                    >
-                      {s.symbol} - {s.name} ({s.exchange})
-                    </button>
-                  ))
-                ) : (
-                  <div className="suggestion-empty">No stocks found</div>
+            <div className="input-group">
+              <label>Sector</label>
+              <input
+                value={sector}
+                onChange={(e) => setSector(e.target.value)}
+                placeholder={selectedType ? "e.g. Banking, IT, Pharma" : "Create/select portfolio first"}
+                disabled={!hasPortfolioType || !selectedType}
+              />
+            </div>
+
+            <div className="input-group">
+              <label>Search stock</label>
+              <div ref={searchBoxRef}>
+                <input
+                  value={query}
+                  onFocus={() => {
+                    if (selectedType && query.length >= 1) {
+                      setShowSuggestions(true);
+                    }
+                  }}
+                  onChange={(e) => {
+                    setSelectedSuggestion(null);
+                    setQuery(e.target.value);
+                  }}
+                  placeholder={selectedType ? 'Type ticker or company, e.g. "TCS"' : "Create/select portfolio first"}
+                  disabled={!hasPortfolioType || !selectedType}
+                />
+                {showSuggestions && selectedType && query.length >= 1 && (
+                  <div className="suggestions">
+                    {suggestions.length > 0 ? (
+                      suggestions.map((s) => (
+                        <button
+                          key={s.symbol}
+                          className="suggestion"
+                          onClick={() => {
+                            setSelectedSuggestion(s);
+                            setQuery(`${s.symbol} - ${s.name} (${s.exchange})`);
+                            setShowSuggestions(false);
+                          }}
+                        >
+                          {s.symbol} - {s.name} ({s.exchange})
+                        </button>
+                      ))
+                    ) : (
+                      <div className="suggestion-empty">No stocks found</div>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
+            </div>
 
-          <button onClick={addStockToPortfolio}>Add to Portfolio</button>
-          {message && <p className="note">{message}</p>}
+            <button onClick={addStockToPortfolio}>Add to portfolio</button>
+            {message && <p className="note">{message}</p>}
+          </div>
         </div>
 
         <div className="card">
-          <h3>Your Portfolio Stocks</h3>
-          <div className="stock-list">
+          <div className="section-head">
+            <div>
+              <span className="section-kicker mono">Current holdings</span>
+              <h3>Your portfolio stocks</h3>
+            </div>
+            <button className="ghost-button" onClick={() => navigate("/explore")}>Open explorer</button>
+          </div>
+          <div className="stock-list stock-list-spacious">
             {stocks.map((stock) => (
               <button
                 key={stock.id}
@@ -294,60 +348,69 @@ function DashboardPage() {
                   })
                 }
               >
-                <div>{stock.company_name}</div>
+                <div className="stock-item-title-row">
+                  <div>{stock.company_name}</div>
+                  <span className="chip chip-subtle mono">{stock.symbol}</span>
+                </div>
                 {(() => {
                   const row = peComparison.find((r) => String(r.symbol).toUpperCase() === String(stock.symbol).toUpperCase());
                   const peTxt = Number.isFinite(Number(row?.pe_ratio)) ? Number(row.pe_ratio).toFixed(2) : "N/A";
                   const discTxt = Number.isFinite(Number(row?.discount_pct)) ? `${Number(row.discount_pct).toFixed(2)}%` : "N/A";
                   return (
                     <small>
-                      {stock.symbol} | {stock.sector} | {stock.portfolio_type_name} | PE: {peTxt} | Discount: {discTxt}
+                      {stock.sector} | {stock.portfolio_type_name} | PE: {peTxt} | Discount: {discTxt}
                     </small>
                   );
                 })()}
               </button>
             ))}
-            {stocks.length === 0 && <p>No stocks yet.</p>}
+            {stocks.length === 0 && <p className="empty-state">No stocks yet. Start by creating a portfolio and adding your first symbol.</p>}
           </div>
         </div>
       </section>
 
-      <section className="grid two">
+      <section className="content-grid">
         <div className="card">
-          <h3>Portfolio PE Ratio Comparison</h3>
+          <div className="section-head">
+            <div>
+              <span className="section-kicker mono">Valuation view</span>
+              <h3>Portfolio PE ratio comparison</h3>
+            </div>
+          </div>
           <div className="chart-box">
             {peComparisonChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={peComparisonChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="symbol" />
-                  <YAxis />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#253351" />
+                  <XAxis dataKey="symbol" tick={{ fill: "#97aacd" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#97aacd" }} axisLine={false} tickLine={false} />
                   <Tooltip
                     formatter={(_, __, item) => {
                       const payload = item?.payload || {};
                       return [payload.pe_available ? payload.pe_ratio : "N/A", "PE Ratio"];
                     }}
-                    contentStyle={{ background: "#0f1528", border: "1px solid #2f3b63", borderRadius: "8px" }}
+                    contentStyle={{ background: "#0f1528", border: "1px solid #2f3b63", borderRadius: "12px" }}
                     labelStyle={{ color: "#7f8db0", fontFamily: "DM Mono" }}
                     itemStyle={{ color: "#dfe8ff", fontWeight: 700 }}
                   />
-                  <Bar dataKey="pe_ratio_value" fill="#22d3ee" stroke="#67e8f9" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="pe_ratio_value" fill="#1dd3b0" stroke="#57f3d7" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <p className="note">No stocks found in your portfolio.</p>
             )}
-            {peUnavailableSymbols.length > 0 && (
-              <p className="note">
-                PE unavailable: {peUnavailableSymbols.join(", ")}
-              </p>
-            )}
+            {peUnavailableSymbols.length > 0 && <p className="note">PE unavailable: {peUnavailableSymbols.join(", ")}</p>}
           </div>
         </div>
 
         <div className="card">
-          <h3>Compare Two Stocks (Your Portfolio)</h3>
-          <div className="inline">
+          <div className="section-head">
+            <div>
+              <span className="section-kicker mono">Quick compare</span>
+              <h3>Compare two stocks</h3>
+            </div>
+          </div>
+          <div className="inline inline-compact">
             <select value={compareA} onChange={(e) => setCompareA(e.target.value)}>
               <option value="">Stock A</option>
               {stockSymbols.map((s) => <option key={`a-${s}`} value={s}>{s}</option>)}
@@ -359,17 +422,18 @@ function DashboardPage() {
             <button onClick={compareStocks}>Compare</button>
           </div>
 
-          {compareResult && (
+          {compareResult ? (
             <div className="compare-box">
-              <p><strong>More Profitable:</strong> {compareResult.more_profitable}</p>
+              <p><strong>More profitable:</strong> {compareResult.more_profitable}</p>
               <p>{compareResult.stock_a.symbol}: Return {compareResult.stock_a.one_year_return_pct}% | Volatility {compareResult.stock_a.volatility_pct}% | Sharpe {compareResult.stock_a.sharpe}</p>
               <p>{compareResult.stock_b.symbol}: Return {compareResult.stock_b.one_year_return_pct}% | Volatility {compareResult.stock_b.volatility_pct}% | Sharpe {compareResult.stock_b.sharpe}</p>
             </div>
+          ) : (
+            <p className="empty-state">Pick any two portfolio symbols to compare returns, volatility and Sharpe ratio.</p>
           )}
         </div>
       </section>
-
-    </div>
+    </AppShell>
   );
 }
 

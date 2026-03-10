@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
+import AppShell from "../components/AppShell";
 
 function RiskCategorizationFeaturePage() {
   const navigate = useNavigate();
@@ -33,19 +34,20 @@ function RiskCategorizationFeaturePage() {
   const high = (data?.items || []).filter((i) => i.risk_category === "High");
 
   return (
-    <div className="stock-details-page">
-      <header className="stock-nav">
-        <div className="stock-brand"><span className="pulse-dot" /><strong>Risk Categorization</strong></div>
-        <button className="stock-back-btn" onClick={() => navigate("/other-features")}>Back</button>
-      </header>
-      {loading && <section className="stock-card"><p>Loading risk profile...</p></section>}
-      {error && <section className="stock-card"><p className="error">{error}</p></section>}
+    <AppShell
+      eyebrow="Feature Hub / Risk"
+      title="Risk categorization"
+      subtitle="Review how your holdings cluster into low, medium and high-risk bands based on return and volatility."
+      actions={<button className="ghost-button" onClick={() => navigate("/other-features")}>Back to hub</button>}
+    >
+      {loading && <section className="card"><p>Loading risk profile...</p></section>}
+      {error && <section className="card"><p className="error">{error}</p></section>}
       {data && (
-        <section className="stock-card">
-          <div className="inline">
-            <span className="mono">Low: {data.summary?.Low || 0}</span>
-            <span className="mono">Medium: {data.summary?.Medium || 0}</span>
-            <span className="mono">High: {data.summary?.High || 0}</span>
+        <section className="card">
+          <div className="inline inline-compact">
+            <span className="chip mono">Low: {data.summary?.Low || 0}</span>
+            <span className="chip mono">Medium: {data.summary?.Medium || 0}</span>
+            <span className="chip mono">High: {data.summary?.High || 0}</span>
           </div>
           <div className="risk-grid grid three">
             <div className="risk-col">
@@ -60,7 +62,7 @@ function RiskCategorizationFeaturePage() {
                     <small>{item.symbol} | {item.sector} | Return {item.annual_return_pct}% | Volatility {item.volatility_pct}%</small>
                   </div>
                 ))}
-                {low.length === 0 && <p>No low-risk stocks.</p>}
+                {low.length === 0 && <p className="empty-state">No low-risk stocks.</p>}
               </div>
             </div>
             <div className="risk-col">
@@ -75,7 +77,7 @@ function RiskCategorizationFeaturePage() {
                     <small>{item.symbol} | {item.sector} | Return {item.annual_return_pct}% | Volatility {item.volatility_pct}%</small>
                   </div>
                 ))}
-                {medium.length === 0 && <p>No medium-risk stocks.</p>}
+                {medium.length === 0 && <p className="empty-state">No medium-risk stocks.</p>}
               </div>
             </div>
             <div className="risk-col">
@@ -90,13 +92,13 @@ function RiskCategorizationFeaturePage() {
                     <small>{item.symbol} | {item.sector} | Return {item.annual_return_pct}% | Volatility {item.volatility_pct}%</small>
                   </div>
                 ))}
-                {high.length === 0 && <p>No high-risk stocks.</p>}
+                {high.length === 0 && <p className="empty-state">No high-risk stocks.</p>}
               </div>
             </div>
           </div>
         </section>
       )}
-    </div>
+    </AppShell>
   );
 }
 

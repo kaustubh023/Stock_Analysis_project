@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Cell, CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
+import AppShell from "../components/AppShell";
 
 function PortfolioClusteringPage() {
   const navigate = useNavigate();
@@ -31,18 +32,14 @@ function PortfolioClusteringPage() {
   }, [k, method]);
 
   return (
-    <div className="stock-details-page">
-      <header className="stock-nav">
-        <div className="stock-brand">
-          <span className="pulse-dot" />
-          <strong>AutoVest Analytics</strong>
-        </div>
-        <p className="stock-breadcrumb">Portfolio â€º Cluster Lab</p>
-        <button className="stock-back-btn" onClick={() => navigate("/dashboard")}>Back to Dashboard</button>
-      </header>
-
-      <section className="stock-card">
-        <div className="inline">
+    <AppShell
+      eyebrow="Analytics / Cluster Lab"
+      title="Portfolio clustering"
+      subtitle="Project your portfolio into clusters and inspect how similar stocks group together under different projection methods."
+      actions={<button className="ghost-button" onClick={() => navigate("/dashboard")}>Back to dashboard</button>}
+    >
+      <section className="card">
+        <div className="inline inline-compact">
           <label className="mono">Clusters (k)</label>
           <select value={k} onChange={(e) => setK(Number(e.target.value))}>
             {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
@@ -56,20 +53,20 @@ function PortfolioClusteringPage() {
         </div>
       </section>
 
-      {loading && <section className="stock-card"><p>Computing clusters...</p></section>}
-      {error && <section className="stock-card"><p className="error">{error}</p></section>}
+      {loading && <section className="card"><p>Computing clusters...</p></section>}
+      {error && <section className="card"><p className="error">{error}</p></section>}
 
       {data && (
         <>
-          {data.detail && <section className="stock-card"><p>{data.detail}</p></section>}
+          {data.detail && <section className="card"><p>{data.detail}</p></section>}
           {data.items && data.items.length > 0 && (
-            <section className="stock-card">
-              <h3>Portfolio Clusters ({String(data.method_used).toUpperCase()} + KMeans)</h3>
+            <section className="card">
+              <h3>Portfolio clusters ({String(data.method_used).toUpperCase()} + KMeans)</h3>
               <ResponsiveContainer width="100%" height={360}>
                 <ScatterChart>
                   <CartesianGrid stroke="#2a3458" />
-                  <XAxis type="number" dataKey="x" name="Component 1" />
-                  <YAxis type="number" dataKey="y" name="Component 2" />
+                  <XAxis type="number" dataKey="x" name="Component 1" tick={{ fill: "#97aacd" }} axisLine={false} tickLine={false} />
+                  <YAxis type="number" dataKey="y" name="Component 2" tick={{ fill: "#97aacd" }} axisLine={false} tickLine={false} />
                   <Tooltip
                     cursor={{ strokeDasharray: "3 3" }}
                     contentStyle={{ background: "#0f1528", border: "1px solid #2f3b63", borderRadius: "8px" }}
@@ -86,8 +83,8 @@ function PortfolioClusteringPage() {
             </section>
           )}
           {data.cluster_summary && data.cluster_summary.length > 0 && (
-            <section className="stock-card">
-              <h3>Cluster Summary</h3>
+            <section className="card">
+              <h3>Cluster summary</h3>
               <div className="stock-metrics">
                 {data.cluster_summary.map((s) => (
                   <div key={s.cluster} className="detail-metric neutral">
@@ -101,7 +98,7 @@ function PortfolioClusteringPage() {
           )}
         </>
       )}
-    </div>
+    </AppShell>
   );
 }
 

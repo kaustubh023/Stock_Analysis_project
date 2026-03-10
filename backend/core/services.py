@@ -196,6 +196,154 @@ def _fetch_finnhub_metrics(symbol: str) -> dict:
         return {}
 
 
+def _to_alpha_symbol(symbol: str) -> str:
+    base, exch = _split_symbol_exchange(symbol)
+    if exch == "NSE":
+        return f"{base}.NSE"
+    if exch == "BSE":
+        return f"{base}.BSE"
+    return base
+
+
+def _trim_history_by_period(df: pd.DataFrame, period: str) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame()
+    mapping = {
+        "1mo": 31,
+        "3mo": 92,
+        "6mo": 184,
+        "1y": 366,
+        "2y": 732,
+        "5y": 1830,
+    }
+    days = mapping.get((period or "").strip())
+    if not days:
+        return df
+    cutoff = pd.Timestamp.utcnow().tz_localize(None) - pd.Timedelta(days=days)
+    return df[df.index >= cutoff].copy()
+
+
+def _fetch_history_alpha_vantage(symbol: str, period: str = "1y", interval: str = "1d"):
+    apikey = _env("ALPHAVANTAGE_API_KEY")
+    if not apikey:
+        return pd.DataFrame()
+
+    normalized_symbol = quote_plus(_to_alpha_symbol(symbol))
+    interval = (interval or "1d").strip().lower()
+    try:
+        if interval in {"1d", "1wk", "1mo"}:
+            if interval == "1d":
+                function = "TIME_SERIES_DAILY_ADJUSTED"
+                series_key = "Time Series (Daily)"
+            elif interval == "1wk":
+                function = "TIME_SERIES_WEEKLY_ADJUSTED"
+                series_key = "Weekly Adjusted Time Series"
+            else:
+                function = "TIME_SERIES_MONTHLY_ADJUSTED"
+                series_key = "Monthly Adjusted Time Series"
+            url = (
+                f"https://www.alphavantage.co/query?function={function}&symbol={normalized_symbol}"
+                f"&outputsize=full&apikey={quote_plus(apikey)}"
+            )
+        elif interval in {"15m", "30m", "60m"}:
+            url = (
+                f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol={normalized_symbol}"
+                f"&interval={quote_plus(interval)}&outputsize=full&apikey={quote_plus(apikey)}"
+            )
+            series_key = f"Time Series ({interval})"
+        else:
+            return pd.DataFrame()
+
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=6) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+
+        rows = (payload or {}).get(series_key) or {}
+        if not isinstance(rows, dict) or not rows:
+            return pd.DataFrame()
+
+        dates = []
+        closes = []
+        volumes = []
+        for dt, row in rows.items():
+            try:
+                dates.append(pd.to_datetime(dt))
+                closes.append(float(row.get("4. close") or row.get("5. adjusted close")))
+                volumes.append(float(row.get("6. volume") or row.get("5. volume") or np.nan))
+            except Exception:
+                continue
+
+        if not dates or not closes:
+            return pd.DataFrame()
+
+        df = pd.DataFrame({"Close": closes, "Volume": volumes}, index=pd.DatetimeIndex(dates))
+        df = df.sort_index()
+        df = _trim_history_by_period(df, period)
+        return _normalize_history_df(df, symbol=symbol)
+    except Exception:
+        return pd.DataFrame()
+
+
+def _fetch_alpha_quote(symbol: str) -> dict:
+    apikey = _env("ALPHAVANTAGE_API_KEY")
+    if not apikey:
+        return {}
+    try:
+        normalized_symbol = quote_plus(_to_alpha_symbol(symbol))
+        url = (
+            f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={normalized_symbol}"
+            f"&apikey={quote_plus(apikey)}"
+        )
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=5) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        quote = (payload or {}).get("Global Quote") or {}
+        if not quote:
+            return {}
+
+        out = {}
+        price = _safe_float(quote.get("05. price"), default=np.nan)
+        prev_close = _safe_float(quote.get("08. previous close"), default=np.nan)
+        if not np.isnan(price) and price > 0:
+            out["regularMarketPrice"] = float(price)
+        if not np.isnan(prev_close) and prev_close > 0:
+            out["regularMarketPreviousClose"] = float(prev_close)
+        return out
+    except Exception:
+        return {}
+
+
+def _fetch_alpha_metrics(symbol: str) -> dict:
+    apikey = _env("ALPHAVANTAGE_API_KEY")
+    if not apikey:
+        return {}
+    try:
+        normalized_symbol = quote_plus(_to_alpha_symbol(symbol))
+        url = (
+            f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={normalized_symbol}"
+            f"&apikey={quote_plus(apikey)}"
+        )
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=5) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        if not isinstance(payload, dict) or not payload:
+            return {}
+
+        out = {}
+        pe = _safe_float(payload.get("PERatio"), default=np.nan)
+        eps = _safe_float(payload.get("EPS"), default=np.nan)
+        market_cap = _safe_float(payload.get("MarketCapitalization"), default=np.nan)
+        if not np.isnan(pe) and pe > 0:
+            out["trailingPE"] = float(pe)
+        if not np.isnan(eps) and eps > 0:
+            out["epsTrailingTwelveMonths"] = float(eps)
+        if not np.isnan(market_cap) and market_cap > 0:
+            out["marketCap"] = float(market_cap)
+        return out
+    except Exception:
+        return {}
+
+
 def _is_yahoo_temporarily_blocked() -> bool:
     return time.time() < _YAHOO_DOWN_UNTIL_TS
 
@@ -280,6 +428,9 @@ def _normalize_history_df(df: pd.DataFrame | None, symbol: str | None = None):
 def _fetch_history(symbol: str, period: str = "1y", interval: str = "1d"):
     # Prefer external provider if configured
     hist = _fetch_history_twelve(symbol, period=period, interval=interval)
+    if hist is not None and not hist.empty:
+        return hist
+    hist = _fetch_history_alpha_vantage(symbol, period=period, interval=interval)
     if hist is not None and not hist.empty:
         return hist
     if _is_yahoo_temporarily_blocked():
@@ -367,6 +518,22 @@ def _fetch_quote_map(symbols: list[str]):
                 continue
         missing_after_ext = [s for s in symbols if s not in out]
         symbols = missing_after_ext or []
+        if not symbols:
+            return out
+    alpha_key = _env("ALPHAVANTAGE_API_KEY")
+    if alpha_key and symbols:
+        for s in list(symbols):
+            try:
+                q = _fetch_alpha_quote(s)
+                m = _fetch_alpha_metrics(s)
+                if q or m:
+                    row = {}
+                    row.update(q)
+                    row.update(m)
+                    out[s] = row
+            except Exception:
+                continue
+        symbols = [s for s in symbols if s not in out]
         if not symbols:
             return out
     try:

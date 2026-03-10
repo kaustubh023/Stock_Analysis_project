@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 import { useNavigate } from "react-router-dom";
 import api from "../api";
+import AppShell from "../components/AppShell";
 
 function ExploreGoldSilverPage() {
   const navigate = useNavigate();
@@ -27,25 +28,25 @@ function ExploreGoldSilverPage() {
   }, []);
 
   return (
-    <div className="page dashboard-page">
-      <header className="topbar dashboard-topbar">
-        <div>
-          <p className="dashboard-brand mono"><span className="pulse-dot" /> Explore</p>
-          <h2>Gold/Silver Correlation</h2>
-          <p>Dedicated commodity analytics page</p>
-        </div>
-        <div className="inline">
-          <button onClick={() => navigate("/other-features")}>Back to Other Features</button>
-        </div>
-      </header>
-
+    <AppShell
+      eyebrow="Feature Hub / Commodities"
+      title="Gold and silver correlation"
+      subtitle="Use the shared app shell to inspect commodity correlation with line, scatter and regression views."
+      actions={<button className="ghost-button" onClick={() => navigate("/other-features")}>Back to hub</button>}
+    >
       {loading && <section className="card"><p>Loading gold/silver analysis...</p></section>}
       {error && <section className="card"><p className="error">{error}</p></section>}
 
       {goldSilver && (
         <section className="card">
-          <h3>Gold vs Silver (5 Years) Correlation: {goldSilver.correlation}</h3>
-          <div className="inline">
+          <div className="section-head">
+            <div>
+              <span className="section-kicker mono">Commodity lens</span>
+              <h3>Gold vs silver (5 years)</h3>
+            </div>
+            <span className="chip mono">Correlation: {goldSilver.correlation}</span>
+          </div>
+          <div className="inline inline-compact">
             <select value={commodityView} onChange={(e) => setCommodityView(e.target.value)}>
               <option value="gold">Gold</option>
               <option value="silver">Silver</option>
@@ -55,13 +56,13 @@ function ExploreGoldSilverPage() {
             <GraphCard title="Gold & Silver Correlation Graph">
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={goldSilver.line_graph}>
-                  <CartesianGrid strokeDasharray="3 3" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#253351" />
                   <XAxis dataKey="date" hide />
-                  <YAxis />
+                  <YAxis tick={{ fill: "#97aacd" }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ background: "#0f1528", border: "1px solid #2f3b63", borderRadius: "8px" }} labelStyle={{ color: "#7f8db0", fontFamily: "DM Mono" }} itemStyle={{ color: "#dfe8ff", fontWeight: 700 }} />
                   <Legend />
-                  <Line type="monotone" dataKey="gold" stroke="#b8860b" dot={false} />
-                  <Line type="monotone" dataKey="silver" stroke="#708090" dot={false} />
+                  <Line type="monotone" dataKey="gold" stroke="#d4a017" dot={false} />
+                  <Line type="monotone" dataKey="silver" stroke="#c7d2da" dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </GraphCard>
@@ -69,13 +70,13 @@ function ExploreGoldSilverPage() {
             <GraphCard title="Scatter Graph">
               <ResponsiveContainer width="100%" height={260}>
                 <ScatterChart>
-                  <CartesianGrid />
-                  <XAxis type="number" dataKey="x" name={commodityView === "gold" ? "Gold" : "Silver"} />
-                  <YAxis type="number" dataKey="y" name={commodityView === "gold" ? "Silver" : "Gold"} />
+                  <CartesianGrid stroke="#253351" />
+                  <XAxis type="number" dataKey="x" name={commodityView === "gold" ? "Gold" : "Silver"} tick={{ fill: "#97aacd" }} axisLine={false} tickLine={false} />
+                  <YAxis type="number" dataKey="y" name={commodityView === "gold" ? "Silver" : "Gold"} tick={{ fill: "#97aacd" }} axisLine={false} tickLine={false} />
                   <Tooltip cursor={{ strokeDasharray: "3 3" }} contentStyle={{ background: "#0f1528", border: "1px solid #2f3b63", borderRadius: "8px" }} labelStyle={{ color: "#7f8db0", fontFamily: "DM Mono" }} itemStyle={{ color: "#dfe8ff", fontWeight: 700 }} />
                   <Scatter
-                    data={commodityView === "gold" ? goldSilver.scatter_graph : goldSilver.scatter_graph.map((p) => ({ x: p.y, y: p.x }))}
-                    fill={commodityView === "gold" ? "#b8860b" : "#c0c0c0"}
+                    data={commodityView === "gold" ? goldSilver.scatter_graph : goldSilver.scatter_graph.map((point) => ({ x: point.y, y: point.x }))}
+                    fill={commodityView === "gold" ? "#d4a017" : "#c7d2da"}
                   />
                 </ScatterChart>
               </ResponsiveContainer>
@@ -84,18 +85,18 @@ function ExploreGoldSilverPage() {
             <GraphCard title="Linear Regression Graph">
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={buildCommodityRegression(goldSilver.line_graph, commodityView)}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="x" />
-                  <YAxis />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#253351" />
+                  <XAxis dataKey="x" tick={{ fill: "#97aacd" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#97aacd" }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ background: "#0f1528", border: "1px solid #2f3b63", borderRadius: "8px" }} labelStyle={{ color: "#7f8db0", fontFamily: "DM Mono" }} itemStyle={{ color: "#dfe8ff", fontWeight: 700 }} />
-                  <Line type="monotone" dataKey="y" stroke={commodityView === "gold" ? "#b8860b" : "#c0c0c0"} dot={false} />
+                  <Line type="monotone" dataKey="y" stroke={commodityView === "gold" ? "#d4a017" : "#c7d2da"} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </GraphCard>
           </div>
         </section>
       )}
-    </div>
+    </AppShell>
   );
 }
 
@@ -105,19 +106,20 @@ function buildCommodityRegression(lineData, mode) {
       x: Number(mode === "gold" ? row.gold : row.silver),
       y: Number(mode === "gold" ? row.silver : row.gold),
     }))
-    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
 
   if (points.length < 2) return [];
   const n = points.length;
-  const sumX = points.reduce((a, p) => a + p.x, 0);
-  const sumY = points.reduce((a, p) => a + p.y, 0);
-  const sumXY = points.reduce((a, p) => a + p.x * p.y, 0);
-  const sumXX = points.reduce((a, p) => a + p.x * p.x, 0);
+  const sumX = points.reduce((a, point) => a + point.x, 0);
+  const sumY = points.reduce((a, point) => a + point.y, 0);
+  const sumXY = points.reduce((a, point) => a + point.x * point.y, 0);
+  const sumXX = points.reduce((a, point) => a + point.x * point.x, 0);
   const den = n * sumXX - sumX * sumX;
   const slope = den !== 0 ? (n * sumXY - sumX * sumY) / den : 0;
   const intercept = (sumY - slope * sumX) / n;
-  const minX = Math.min(...points.map((p) => p.x));
-  const maxX = Math.max(...points.map((p) => p.x));
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+
   if (!Number.isFinite(minX) || !Number.isFinite(maxX) || minX === maxX) {
     return points.slice(0, 2);
   }

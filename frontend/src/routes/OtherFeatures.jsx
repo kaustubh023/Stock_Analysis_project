@@ -1,53 +1,65 @@
 import { useNavigate } from "react-router-dom";
+import AppShell from "../components/AppShell";
 
 function OtherFeaturesPage() {
   const navigate = useNavigate();
-  return (
-    <div className="page dashboard-page">
-      <header className="topbar dashboard-topbar">
-        <div>
-          <p className="dashboard-brand mono"><span className="pulse-dot" /> Feature Hub</p>
-          <h2>Other Features</h2>
-          <p>Run advanced analytics on your portfolio stocks</p>
-        </div>
-        <div className="inline">
-          <button onClick={() => navigate("/dashboard")}>Back to Dashboard</button>
-        </div>
-      </header>
 
-      <section className="grid two">
-        <div className="card">
-          <h3>Compare Stocks</h3>
-          <p className="note">Compare return, volatility and sharpe for two owned stocks.</p>
-          <button onClick={() => navigate("/features/compare-stocks")}>Open</button>
-        </div>
-        <div className="card">
-          <h3>Risk Categorization</h3>
-          <p className="note">Classify each stock into low, medium or high risk bands.</p>
-          <button onClick={() => navigate("/features/risk-categorization")}>Open</button>
-        </div>
-        <div className="card">
-          <h3>Portfolio Clustering</h3>
-          <p className="note">Group portfolio stocks using PCA/UMAP and k-means.</p>
-          <button onClick={() => navigate("/features/portfolio-cluster")}>Open</button>
-        </div>
-        <div className="card">
-          <h3>Gold/Silver Correlation</h3>
-          <p className="note">View dedicated 5-year gold vs silver analysis charts.</p>
-          <button onClick={() => navigate("/features/gold-silver")}>Open</button>
-        </div>
-        <div className="card">
-          <h3>Stock Forecasting</h3>
-          <p className="note">Generate linear-regression-based near-term forecasts.</p>
-          <button onClick={() => navigate("/features/stock-forecast")}>Open</button>
-        </div>
-        <div className="card">
-          <h3>BTC-USD Hourly Forecast</h3>
-          <p className="note">ARIMA-based next 1-hour price prediction and chart.</p>
-          <button onClick={() => navigate("/features/btc-usd-hourly")}>Open</button>
-        </div>
+  const features = [
+    {
+      title: "Compare Stocks",
+      note: "Compare return, volatility and Sharpe for two owned stocks.",
+      tag: "Portfolio compare",
+      to: "/features/compare-stocks",
+    },
+    {
+      title: "Risk Categorization",
+      note: "Classify each stock into low, medium or high risk bands.",
+      tag: "Risk lens",
+      to: "/features/risk-categorization",
+    },
+    {
+      title: "Portfolio Clustering",
+      note: "Group portfolio stocks using PCA or UMAP with k-means clustering.",
+      tag: "Quant analysis",
+      to: "/features/portfolio-cluster",
+    },
+    {
+      title: "Gold/Silver Correlation",
+      note: "Study the five-year relationship between gold and silver with multiple charts.",
+      tag: "Commodity view",
+      to: "/features/gold-silver",
+    },
+    {
+      title: "Stock Forecasting",
+      note: "Generate near-term forecasts for a chosen stock and inspect portfolio next-day predictions.",
+      tag: "Forecasting",
+      to: "/features/stock-forecast",
+    },
+    {
+      title: "BTC-USD Hourly Forecast",
+      note: "Review a dedicated ARIMA-based next-hour crypto forecast.",
+      tag: "Crypto",
+      to: "/features/btc-usd-hourly",
+    },
+  ];
+
+  return (
+    <AppShell
+      eyebrow="Feature Hub"
+      title="Advanced analytics workspace"
+      subtitle="Every tool below keeps the same project flow and data sources, but gives each analysis its own dedicated surface."
+    >
+      <section className="feature-grid">
+        {features.map((feature) => (
+          <article key={feature.to} className="card feature-card">
+            <span className="chip chip-subtle mono">{feature.tag}</span>
+            <h3>{feature.title}</h3>
+            <p className="note">{feature.note}</p>
+            <button onClick={() => navigate(feature.to)}>Open analysis</button>
+          </article>
+        ))}
       </section>
-    </div>
+    </AppShell>
   );
 }
 

@@ -74,7 +74,7 @@ function LoginPage() {
             return;
           }
         } catch {
-          // ignore
+          // Ignore user existence checks if the endpoint is unavailable.
         }
       }
       setError(formatApiError(err));
@@ -102,31 +102,31 @@ function LoginPage() {
 
         <div className="auth-brand">
           <span className="pulse-dot" />
-          <h1>StockSense</h1>
+          <h1>AutoVest Analytics</h1>
         </div>
 
         <div className="floating-stats">
           <div className="float-card f1">
-            <div className="mono">NIFTY 50 Â· +1.24% Â· 22,450.30</div>
+            <div className="mono">NIFTY 50 | +1.24% | 22,450.30</div>
             <svg viewBox="0 0 200 38"><polyline points="2,30 38,24 68,27 98,17 126,20 162,11 198,8" /></svg>
           </div>
           <div className="float-card f2">
-            <div className="mono">SENSEX Â· -0.38% Â· 73,912.11</div>
+            <div className="mono">SENSEX | -0.38% | 73,912.11</div>
             <svg viewBox="0 0 200 38" className="neg"><polyline points="2,8 36,12 66,16 98,18 126,24 162,28 198,32" /></svg>
           </div>
           <div className="float-card f3">
-            <div className="mono">Your Portfolio Â· â–² 8.3% this month</div>
+            <div className="mono">Portfolio pulse | +8.3% this month</div>
           </div>
         </div>
 
-        <p className="auth-quote">"Investing is not about timing the market, it's about time in the market."</p>
+        <p className="auth-quote">"Good investing is disciplined, repeatable, and built on clarity."</p>
       </section>
 
       <section className="auth-right">
         <div className="auth-form-wrap">
-          <span className="secure-badge mono">SECURE LOGIN</span>
+          <span className="secure-badge mono">SECURE ACCESS</span>
           <h2>{isRegister ? "Create Account" : "Welcome Back"}</h2>
-          <p>{isRegister ? "Register to access your Stock Analysis dashboard" : "Sign in to your Stock Analysis dashboard"}</p>
+          <p>{isRegister ? "Create your workspace to track portfolios, forecasts and risk." : "Sign in to continue with your analytics workspace."}</p>
 
           <form onSubmit={submit}>
             <label className="input-shell">
@@ -148,7 +148,7 @@ function LoginPage() {
           </form>
 
           <button className="auth-toggle" onClick={() => setIsRegister((v) => !v)}>
-            {isRegister ? "Already have account? Login" : "No account? Register"}
+            {isRegister ? "Already have an account? Login" : "No account? Register"}
           </button>
         </div>
       </section>

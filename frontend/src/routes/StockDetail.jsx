@@ -57,10 +57,10 @@ function StockDetailPage() {
           <span className="pulse-dot" />
           <strong>AutoVest Analytics</strong>
         </div>
-        <p className="stock-breadcrumb">Portfolio â€º Indian Stocks â€º <span className="mono">{symbol}</span></p>
-        <div className="inline">
-          <button className="stock-back-btn" onClick={openTrendForStock}>Trend Analysis</button>
-          <button className="stock-back-btn" onClick={() => navigate("/dashboard")}>Back to Portfolio</button>
+        <p className="stock-breadcrumb">Portfolio / Indian Stocks / <span className="mono">{symbol}</span></p>
+        <div className="inline inline-compact">
+          <button className="stock-back-btn" onClick={openTrendForStock}>Trend analysis</button>
+          <button className="stock-back-btn" onClick={() => navigate("/dashboard")}>Back to portfolio</button>
         </div>
       </header>
 
@@ -71,9 +71,9 @@ function StockDetailPage() {
         <>
           <section className="stock-hero fade-up delay-1">
             <div className="hero-left">
-              <span className="live-badge"><span className="pulse-dot" /> NSE Â· LIVE</span>
+              <span className="live-badge"><span className="pulse-dot" /> NSE / LIVE</span>
               <h1>{companyFromState || stockAnalytics.metrics.company}</h1>
-              <p className="stock-sub mono">{stockAnalytics.metrics.symbol} Â· {sector}</p>
+              <p className="stock-sub mono">{stockAnalytics.metrics.symbol} / {sector}</p>
             </div>
             <div className="hero-right">
               <h2 className="mono">{formatCurrency(stockAnalytics.metrics.current_price)}</h2>
@@ -94,12 +94,12 @@ function StockDetailPage() {
             <DetailMetric label="Min Price" value={formatCurrency(stockAnalytics.metrics.min_price)} subtitle="1Y lowest close" tone="neg" mono />
             <DetailMetric label="Max Price" value={formatCurrency(stockAnalytics.metrics.max_price)} subtitle="1Y highest close" tone="pos" mono />
             <DetailMetric label="PE Ratio" value={formatPERatio(stockAnalytics.metrics.pe_ratio)} subtitle="Price to earnings multiple" tone="neutral" mono />
-            <DetailMetric label="MarketCap" value={formatMarketCap(stockAnalytics.metrics.market_cap)} subtitle="Total market capitalization" tone="neutral" mono />
+            <DetailMetric label="Market Cap" value={formatMarketCap(stockAnalytics.metrics.market_cap)} subtitle="Total market capitalization" tone="neutral" mono />
             <DetailMetric label="Intrinsic" value={formatCurrency(stockAnalytics.metrics.intrinsic)} subtitle="Estimated fair value" tone="neutral" mono />
             <DetailMetric
-              label="Discount%"
+              label="Discount %"
               value={formatDiscount(stockAnalytics.metrics.discount_pct)}
-              subtitle="Vs intrinsic value"
+              subtitle="Versus intrinsic value"
               tone={Number(stockAnalytics.metrics.discount_pct) >= 0 ? "pos" : "neg"}
               mono
             />
@@ -130,7 +130,7 @@ function StockDetailPage() {
           </section>
 
           <footer className="stock-footer">
-            <p className="mono">AutoVest Analytics Â· Data from Yahoo Finance Â· Not investment advice Â· Updated {today}</p>
+            <p className="mono">AutoVest Analytics / Data from Yahoo Finance / Not investment advice / Updated {today}</p>
           </footer>
         </>
       )}
@@ -140,17 +140,17 @@ function StockDetailPage() {
 
 function formatCurrency(value) {
   const n = Number(value || 0);
-  return `₹${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  return `Rs ${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
 function formatMarketCap(value) {
   const n = Number(value || 0);
   if (!n) return "N/A";
-  if (n >= 1e12) return `₹${(n / 1e12).toFixed(2)}T`;
-  if (n >= 1e9) return `₹${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `₹${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `₹${(n / 1e3).toFixed(2)}K`;
-  return `₹${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  if (n >= 1e12) return `Rs ${(n / 1e12).toFixed(2)}T`;
+  if (n >= 1e9) return `Rs ${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `Rs ${(n / 1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `Rs ${(n / 1e3).toFixed(2)}K`;
+  return `Rs ${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
 function formatPERatio(value) {
