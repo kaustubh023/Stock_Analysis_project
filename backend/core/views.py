@@ -1,5 +1,6 @@
-from django.contrib.auth.models import User
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
+from django.contrib.auth.models import User
 from django.db.models import Q
 from django.http import HttpResponseForbidden
 from django.shortcuts import render
@@ -10,20 +11,32 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import PortfolioType, PortfolioStock
-from .serializers import RegisterSerializer, PortfolioTypeSerializer, PortfolioStockSerializer
+from .models import PortfolioStock, PortfolioType
+from .serializers import PortfolioStockSerializer, PortfolioTypeSerializer, RegisterSerializer
 from .services import (
-    compare_two_stocks,
+    build_portfolio_trend_analysis,
     categorize_portfolio_risk,
+    compare_two_stocks,
     fetch_stock_metrics,
     forecast_stock_prices,
-    portfolio_next_day_predictions,
+    get_cached_gold_silver_correlation,
+    get_cached_portfolio_next_day_predictions,
+    get_cached_portfolio_pe_comparison,
     gold_silver_correlation,
     portfolio_kmeans_projection,
+    portfolio_next_day_predictions,
     portfolio_pe_comparison,
-    build_portfolio_trend_analysis,
     search_indian_stocks,
 )
+
+
+def run_with_timeout(fn, *args, timeout: int):
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(fn, *args)
+    try:
+        return future.result(timeout=timeout)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 class RegisterView(APIView):
@@ -145,7 +158,16 @@ class PortfolioPEComparisonView(APIView):
             .values_list("symbol", flat=True)
             .distinct()
         )
-        return Response({"items": portfolio_pe_comparison(symbols)})
+        try:
+            result = run_with_timeout(portfolio_pe_comparison, symbols, timeout=12)
+            return Response({"items": result})
+        except FuturesTimeoutError:
+            return Response(
+                {
+                    "items": get_cached_portfolio_pe_comparison(symbols),
+                    "detail": "PE comparison timed out while fetching market data. Showing cached values where available.",
+                }
+            )
 
 
 class CompareStocksView(APIView):
@@ -172,7 +194,18 @@ class CompareStocksView(APIView):
 class GoldSilverCorrelationView(APIView):
     def get(self, request):
         try:
-            return Response(gold_silver_correlation())
+            result = run_with_timeout(gold_silver_correlation, timeout=15)
+            return Response(result)
+        except FuturesTimeoutError:
+            cached = get_cached_gold_silver_correlation()
+            if cached is not None:
+                payload = dict(cached)
+                payload["detail"] = "Gold/silver refresh timed out. Showing cached analysis."
+                return Response(payload)
+            return Response(
+                {"detail": "Gold/silver analysis timed out while fetching market data. Please retry shortly."},
+                status=status.HTTP_504_GATEWAY_TIMEOUT,
+            )
         except Exception as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -188,21 +221,30 @@ class PortfolioClusteringView(APIView):
             PortfolioStock.objects.filter(user=request.user)
             .values("symbol", "company_name", "sector")
         )
-        # Deduplicate by symbol to avoid repeated API pulls for same stock in different sectors/types.
         seen = set()
         stocks = []
-        for s in raw_stocks:
-            sym = (s.get("symbol") or "").strip().upper()
-            if not sym or sym in seen:
+        for stock in raw_stocks:
+            symbol = (stock.get("symbol") or "").strip().upper()
+            if not symbol or symbol in seen:
                 continue
-            seen.add(sym)
-            s["symbol"] = sym
-            stocks.append(s)
+            seen.add(symbol)
+            stock["symbol"] = symbol
+            stocks.append(stock)
         try:
-            result = portfolio_kmeans_projection(stocks=stocks, k=k, method=method)
+            result = run_with_timeout(portfolio_kmeans_projection, stocks, k, method, timeout=15)
             return Response(result)
+        except FuturesTimeoutError:
+            return Response(
+                {
+                    "items": [],
+                    "cluster_summary": [],
+                    "method_used": "pca",
+                    "k": max(2, min(k, 6)),
+                    "detail": "Clustering timed out while fetching market data. Please retry shortly.",
+                    "skipped": 0,
+                }
+            )
         except Exception:
-            # Graceful fallback so UI is not blocked by upstream rate limits.
             return Response(
                 {
                     "items": [],
@@ -223,9 +265,7 @@ class RiskCategorizationView(APIView):
             .distinct()
         )
         try:
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(categorize_portfolio_risk, stocks)
-                result = future.result(timeout=12)
+            result = run_with_timeout(categorize_portfolio_risk, stocks, timeout=12)
             return Response(result)
         except FuturesTimeoutError:
             return Response(
@@ -255,18 +295,26 @@ class PortfolioNextDayForecastView(APIView):
         )
         seen = set()
         stocks = []
-        for s in raw_stocks:
-            sym = (s.get("symbol") or "").strip().upper()
-            if not sym or sym in seen:
+        for stock in raw_stocks:
+            symbol = (stock.get("symbol") or "").strip().upper()
+            if not symbol or symbol in seen:
                 continue
-            seen.add(sym)
-            s["symbol"] = sym
-            stocks.append(s)
+            seen.add(symbol)
+            stock["symbol"] = symbol
+            stocks.append(stock)
         try:
-            result = portfolio_next_day_predictions(stocks)
+            result = run_with_timeout(portfolio_next_day_predictions, stocks, timeout=15)
             return Response(result)
+        except FuturesTimeoutError:
+            return Response(
+                {
+                    **get_cached_portfolio_next_day_predictions(stocks),
+                    "detail": "Portfolio forecast timed out while fetching market data. Showing cached values where available.",
+                }
+            )
         except Exception as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 def portfolio_trend_analysis_page(request):
     user = request.user if request.user.is_authenticated else None

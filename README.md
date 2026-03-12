@@ -17,6 +17,14 @@ Backend runs at `http://127.0.0.1:8000`.
 
 Frontend runs at `http://localhost:5173` (or `http://127.0.0.1:5173`). The dev server proxies `/api` to the backend.
 
+### Production deployment note
+- In local development, Vite proxies `/api` to Django.
+- In production, that proxy does not exist.
+- If your frontend and backend are deployed to different Azure URLs, set `VITE_API_BASE_URL` during the frontend build, for example:
+  - `VITE_API_BASE_URL=https://your-backend-app.azurewebsites.net/api`
+- Without that, login requests may be sent to the frontend host instead of the Django API, which causes login/register to fail.
+- For an Azure VM deployment where the frontend is on `http://<vm-ip>` and Django is on `http://<vm-ip>:8000`, the frontend now automatically falls back to `http://<current-host>:8000/api` in production when `VITE_API_BASE_URL` is not set.
+
 ## Implemented Features
 - User register and login (JWT)
 - Portfolio type creation

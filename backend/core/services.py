@@ -57,10 +57,59 @@ _CLUSTER_CACHE_TTL_SECONDS = 900
 _CLUSTER_FAIL_CACHE_TTL_SECONDS = 60
 _PE_CACHE: dict[str, tuple[float, list[dict]]] = {}
 _PE_CACHE_TTL_SECONDS = 120
-_PE_CACHE_VERSION = 2
+_PE_CACHE_VERSION = 3
 _RISK_CACHE: dict[str, tuple[float, dict]] = {}
 _RISK_CACHE_TTL_SECONDS = 120
 _TREND_CACHE_TTL_SECONDS = 600
+_GOLD_SILVER_CACHE: tuple[float, dict] | None = None
+_GOLD_SILVER_CACHE_TTL_SECONDS = 1800
+_FORECAST_CACHE: dict[str, tuple[float, dict]] = {}
+_FORECAST_CACHE_TTL_SECONDS = 900
+_NEXT_DAY_CACHE: dict[str, tuple[float, dict]] = {}
+_NEXT_DAY_CACHE_TTL_SECONDS = 300
+
+
+def get_cached_portfolio_pe_comparison(symbols: list[str]) -> list[dict]:
+    normalized = [str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()]
+    if not normalized:
+        return []
+    cache_key = f"v{_PE_CACHE_VERSION}|" + ",".join(sorted(normalized))
+    cached = _PE_CACHE.get(cache_key)
+    if cached:
+        return cached[1]
+
+    items = []
+    for symbol in normalized:
+        analytics_cached = _ANALYTICS_CACHE.get(symbol)
+        metrics = (analytics_cached[1] or {}).get("metrics", {}) if analytics_cached else {}
+        pe = metrics.get("pe_ratio")
+        disc = metrics.get("discount_pct")
+        items.append(
+            {
+                "symbol": symbol,
+                "pe_ratio": pe if pe is not None else None,
+                "discount_pct": disc if disc is not None else None,
+            }
+        )
+    return items
+
+
+def get_cached_gold_silver_correlation() -> dict | None:
+    return _GOLD_SILVER_CACHE[1] if _GOLD_SILVER_CACHE else None
+
+
+def get_cached_portfolio_next_day_predictions(stocks: list[dict]) -> dict:
+    symbols = sorted(
+        {
+            (stock.get("symbol") or "").strip().upper()
+            for stock in stocks
+            if (stock.get("symbol") or "").strip()
+        }
+    )
+    if not symbols:
+        return {"items": []}
+    cached = _NEXT_DAY_CACHE.get(",".join(symbols))
+    return cached[1] if cached else {"items": []}
 _YAHOO_DOWN_UNTIL_TS = 0.0
 _YAHOO_DOWN_BACKOFF_SECONDS = 90
 
@@ -849,7 +898,8 @@ def search_indian_stocks(query: str):
             pass
 
     ticker_matches = []
-    name_matches = []
+    name_prefix_matches = []
+    name_contains_matches = []
     seen = set()
 
     for item in candidates:
@@ -863,8 +913,10 @@ def search_indian_stocks(query: str):
         is_indian = symbol.endswith(".NS") or symbol.endswith(".BO") or exchange in {"NSE", "BSE"}
         if not is_indian:
             continue
-        ticker_hit = symbol_l.startswith(q) or ticker_base.startswith(q)
-        name_hit = name_l.startswith(q)
+        ticker_hit = symbol_l.startswith(q) or ticker_base.startswith(q) or q in ticker_base or q in symbol_l
+        name_prefix_hit = name_l.startswith(q)
+        name_contains_hit = q in name_l
+        name_hit = name_prefix_hit or name_contains_hit
         if not (ticker_hit or name_hit):
             continue
         if symbol in seen:
@@ -879,13 +931,15 @@ def search_indian_stocks(query: str):
 
         if ticker_hit:
             ticker_matches.append(entry)
+        elif name_prefix_hit:
+            name_prefix_matches.append(entry)
         else:
-            name_matches.append(entry)
+            name_contains_matches.append(entry)
 
-        if len(ticker_matches) + len(name_matches) >= 10:
+        if len(ticker_matches) + len(name_prefix_matches) + len(name_contains_matches) >= 10:
             break
 
-    result = (ticker_matches + name_matches)[:10]
+    result = (ticker_matches + name_prefix_matches + name_contains_matches)[:10]
     # If local + single yfinance pass couldn't fill enough rows, try one NSE-focused pass.
     if len(result) < 10 and should_query_yf:
         try:
@@ -905,18 +959,22 @@ def search_indian_stocks(query: str):
             name_l = name.lower()
 
             is_indian = symbol.endswith(".NS") or symbol.endswith(".BO") or exchange in {"NSE", "BSE"}
-            ticker_hit = symbol_l.startswith(q) or ticker_base.startswith(q)
-            name_hit = name_l.startswith(q)
+            ticker_hit = symbol_l.startswith(q) or ticker_base.startswith(q) or q in ticker_base or q in symbol_l
+            name_prefix_hit = name_l.startswith(q)
+            name_contains_hit = q in name_l
+            name_hit = name_prefix_hit or name_contains_hit
             if (not is_indian) or (not (ticker_hit or name_hit)) or symbol in seen:
                 continue
             seen.add(symbol)
             entry = {"symbol": symbol, "name": name, "exchange": exchange or "NSE"}
             if ticker_hit:
                 ticker_matches.append(entry)
+            elif name_prefix_hit:
+                name_prefix_matches.append(entry)
             else:
-                name_matches.append(entry)
+                name_contains_matches.append(entry)
 
-        result = (ticker_matches + name_matches)[:10]
+        result = (ticker_matches + name_prefix_matches + name_contains_matches)[:10]
     _SEARCH_CACHE[q] = (now, result)
     return result
 
@@ -960,23 +1018,8 @@ def fetch_stock_metrics(symbol: str):
     if history.empty:
         raise ValueError("Unable to fetch stock data right now (Yahoo rate-limit or network issue). Please retry in a few seconds.")
 
-    info = {}
-    fast = {}
     ext_metrics = _fetch_finnhub_metrics(symbol) if _env("FINNHUB_API_KEY") else {}
     ext_quote = _fetch_finnhub_quote(symbol) if _env("FINNHUB_API_KEY") else {}
-    if ticker is not None:
-        try:
-            info = ticker.info or {}
-        except Exception as exc:
-            if _is_network_block_error(exc):
-                _mark_yahoo_temporarily_blocked()
-            info = {}
-        try:
-            fast = dict(ticker.fast_info or {})
-        except Exception as exc:
-            if _is_network_block_error(exc):
-                _mark_yahoo_temporarily_blocked()
-            fast = {}
     quote_map = _fetch_quote_map([symbol])
     quote_row = quote_map.get(symbol, {})
     # Merge external provider fields (if any) with quote row as highest priority
@@ -984,6 +1027,37 @@ def fetch_stock_metrics(symbol: str):
         quote_row = {**quote_row, **ext_metrics}
     if ext_quote:
         quote_row = {**quote_row, **ext_quote}
+
+    info = {}
+    fast = {}
+    if ticker is not None:
+        try:
+            fast = dict(ticker.fast_info or {})
+        except Exception as exc:
+            if _is_network_block_error(exc):
+                _mark_yahoo_temporarily_blocked()
+            fast = {}
+        need_info = not any(
+            [
+                quote_row.get("longName"),
+                quote_row.get("shortName"),
+                quote_row.get("marketCap"),
+                quote_row.get("trailingPE"),
+                quote_row.get("forwardPE"),
+                quote_row.get("epsTrailingTwelveMonths"),
+                fast.get("marketCap"),
+                fast.get("trailingPE"),
+                fast.get("forwardPE"),
+                fast.get("lastPrice"),
+            ]
+        )
+        if need_info:
+            try:
+                info = ticker.info or {}
+            except Exception as exc:
+                if _is_network_block_error(exc):
+                    _mark_yahoo_temporarily_blocked()
+                info = {}
 
     history = history.dropna(subset=["Close"]).copy()
     if history.empty:
@@ -1110,116 +1184,38 @@ def portfolio_pe_comparison(symbols: list[str]):
     if cached and (now - cached[0]) <= _PE_CACHE_TTL_SECONDS:
         return cached[1]
 
-    latest_close: dict[str, float] = {}
-
     quote_map = _fetch_quote_map(symbols)
 
     for symbol in symbols:
         pe = np.nan
-        eps = np.nan
         disc = None
+        analytics_metrics = None
+        analytics_cached = _ANALYTICS_CACHE.get(symbol)
+        if analytics_cached and (now - analytics_cached[0]) <= _ANALYTICS_CACHE_TTL_SECONDS:
+            analytics_metrics = (analytics_cached[1] or {}).get("metrics", {}) or {}
+
         qrow = quote_map.get(symbol, {}) or {}
         # Prefer quote endpoint values first (fast and symbol-specific)
-        close_px = _safe_float(
-            qrow.get("regularMarketPrice") or qrow.get("regularMarketPreviousClose"),
-            default=np.nan,
-        )
-        eps = _safe_float(
-            qrow.get("epsTrailingTwelveMonths") or qrow.get("trailingEps"),
-            default=np.nan,
-        )
         pe = _safe_float(
             (qrow.get("trailingPE") if qrow.get("trailingPE") is not None else qrow.get("forwardPE")),
             default=np.nan,
         )
-        if np.isnan(pe) and eps > 0 and not np.isnan(close_px):
-            pe = _safe_float(close_px / eps, default=np.nan)
-        try:
-            if _is_yahoo_temporarily_blocked():
-                raise RuntimeError("yahoo temporarily blocked")
-            ticker = yf.Ticker(symbol)
-            tkr = yf.Ticker(symbol)
-            fast = {}
-            info = {}
-            try:
-                fast = dict(tkr.fast_info or {})
-            except Exception as exc:
-                if _is_network_block_error(exc):
-                    _mark_yahoo_temporarily_blocked()
-            try:
-                info = tkr.info or {}
-            except Exception as exc:
-                if _is_network_block_error(exc):
-                    _mark_yahoo_temporarily_blocked()
-            yf_pe = _safe_float(
-                fast.get("trailingPE")
-                or fast.get("forwardPE")
-                or info.get("trailingPE")
-                or info.get("forwardPE"),
-                default=np.nan,
-            )
-            if np.isnan(yf_pe):
-                yf_eps = _safe_float(
-                    info.get("trailingEps")
-                    or fast.get("epsTrailingTwelveMonths"),
-                    default=np.nan,
-                )
-                yf_price = _safe_float(
-                    fast.get("lastPrice")
-                    or fast.get("regularMarketPrice")
-                    or info.get("currentPrice")
-                    or info.get("regularMarketPrice"),
-                    default=np.nan,
-                )
-                if yf_eps > 0 and not np.isnan(yf_price):
-                    yf_pe = _safe_float(yf_price / yf_eps, default=np.nan)
-            # Prefer yfinance-derived value when available
-            if not np.isnan(yf_pe) and yf_pe > 0:
-                pe = yf_pe
-            else:
-                # Otherwise, fill remaining missing inputs from yfinance
-                if np.isnan(eps):
-                    eps = _safe_float(
-                        info.get("trailingEps")
-                        or fast.get("epsTrailingTwelveMonths"),
-                        default=np.nan,
-                    )
-                if np.isnan(close_px):
-                    close_px = _safe_float(
-                        fast.get("lastPrice")
-                        or fast.get("regularMarketPrice")
-                        or info.get("currentPrice")
-                        or info.get("regularMarketPrice"),
-                        default=np.nan,
-                    )
-                if np.isnan(pe) and eps > 0 and not np.isnan(close_px):
-                    pe = _safe_float(close_px / eps, default=np.nan)
-            # Final strict per-symbol check (ensures unique PEs if batch data was stale)
-            best = _compute_pe_yf(symbol)
-            if best is not None and best > 0:
-                pe = float(best)
-        except Exception as exc:
-            if _is_network_block_error(exc):
-                _mark_yahoo_temporarily_blocked()
-            pass
+        if analytics_metrics:
+            analytics_pe = _safe_float(analytics_metrics.get("pe_ratio"), default=np.nan)
+            analytics_disc = _safe_float(analytics_metrics.get("discount_pct"), default=np.nan)
+            if np.isnan(pe) and not np.isnan(analytics_pe) and analytics_pe > 0:
+                pe = analytics_pe
+            if disc is None and not np.isnan(analytics_disc):
+                disc = round(float(analytics_disc), 2)
         # Final defensive fallback: use analytics to compute PE and discount% when still unavailable
-        if np.isnan(pe) or pe <= 0:
+        if (np.isnan(pe) or pe <= 0) or disc is None:
             try:
-                metrics = fetch_stock_metrics(symbol).get("metrics", {})
+                metrics = analytics_metrics or fetch_stock_metrics(symbol).get("metrics", {})
                 m_pe = _safe_float(metrics.get("pe_ratio"), default=np.nan)
-                if not np.isnan(m_pe) and m_pe > 0:
+                if (np.isnan(pe) or pe <= 0) and not np.isnan(m_pe) and m_pe > 0:
                     pe = m_pe
                 dval = _safe_float(metrics.get("discount_pct"), default=np.nan)
-                if not np.isnan(dval):
-                    disc = round(float(dval), 2)
-            except Exception:
-                pass
-        # Ensure discount is available even if PE came from quotes
-        if disc is None:
-            try:
-                metrics = fetch_stock_metrics(symbol).get("metrics", {})
-                dval = _safe_float(metrics.get("discount_pct"), default=np.nan)
-                if not np.isnan(dval):
+                if disc is None and not np.isnan(dval):
                     disc = round(float(dval), 2)
             except Exception:
                 pass
@@ -1231,42 +1227,6 @@ def portfolio_pe_comparison(symbols: list[str]):
                 "discount_pct": disc,
             }
         )
-    # Detect pathological case: identical non-null PE for all symbols; recompute with per-symbol quotes
-    unique_values = set([row["pe_ratio"] for row in output])
-    if len(unique_values) == 1 and (list(unique_values)[0] is not None) and len(symbols) > 1:
-        strict_quote_map = {}
-        for s in symbols:
-            strict_quote_map.update(_fetch_quote_map([s]))
-        strict_output = []
-        for s in symbols:
-            qrow = strict_quote_map.get(s, {}) or {}
-            pe = _safe_float(qrow.get("trailingPE") or qrow.get("forwardPE"), default=np.nan)
-            if np.isnan(pe):
-                close_px = _safe_float(qrow.get("regularMarketPrice") or qrow.get("regularMarketPreviousClose"), default=np.nan)
-                eps = _safe_float(qrow.get("epsTrailingTwelveMonths") or qrow.get("trailingEps"), default=np.nan)
-                if eps > 0 and not np.isnan(close_px):
-                    pe = _safe_float(close_px / eps, default=np.nan)
-            # We do not compute discount here; keep behavior focused on PE for the chart
-            strict_output.append({"symbol": s, "pe_ratio": round(float(pe), 2) if not np.isnan(pe) and pe > 0 else None})
-        output = strict_output
-    # If all PE values are still unavailable, make a final pass using analytics for each symbol
-    if all((row.get("pe_ratio") is None) for row in output) and symbols:
-        recovered = []
-        for s in symbols:
-            pe_val = None
-            disc_val = None
-            try:
-                metrics = fetch_stock_metrics(s).get("metrics", {})
-                m_pe = _safe_float(metrics.get("pe_ratio"), default=np.nan)
-                if not np.isnan(m_pe) and m_pe > 0:
-                    pe_val = round(float(m_pe), 2)
-                dval = _safe_float(metrics.get("discount_pct"), default=np.nan)
-                if not np.isnan(dval):
-                    disc_val = round(float(dval), 2)
-            except Exception:
-                pass
-            recovered.append({"symbol": s, "pe_ratio": pe_val, "discount_pct": disc_val})
-        output = recovered
     _PE_CACHE[cache_key] = (now, output)
     return output
 
@@ -1303,8 +1263,56 @@ def compare_two_stocks(symbol_a: str, symbol_b: str):
 
 
 def gold_silver_correlation():
-    gold = _fetch_history("GC=F", period="5y", interval="1d")
-    silver = _fetch_history("SI=F", period="5y", interval="1d")
+    global _GOLD_SILVER_CACHE
+    now = time.time()
+    if _GOLD_SILVER_CACHE and (now - _GOLD_SILVER_CACHE[0]) <= _GOLD_SILVER_CACHE_TTL_SECONDS:
+        return _GOLD_SILVER_CACHE[1]
+
+    def _extract_hist(df, symbol):
+        if df is None or len(df) == 0:
+            return pd.DataFrame()
+        try:
+            if isinstance(df.columns, pd.MultiIndex):
+                lvl0 = list(df.columns.get_level_values(0))
+                lvl1 = list(df.columns.get_level_values(1))
+                if symbol in lvl1:
+                    sub = df.xs(symbol, axis=1, level=1)
+                elif symbol in lvl0:
+                    sub = df.xs(symbol, axis=1, level=0)
+                else:
+                    return pd.DataFrame()
+            else:
+                sub = df
+            close_col = "Close" if "Close" in sub.columns else None
+            if close_col is None:
+                return pd.DataFrame()
+            return sub.dropna(subset=[close_col]).copy()
+        except Exception:
+            return pd.DataFrame()
+
+    batch_df = None
+    if not _is_yahoo_temporarily_blocked():
+        try:
+            batch_df = yf.download(
+                "GC=F SI=F",
+                period="5y",
+                interval="1d",
+                auto_adjust=False,
+                progress=False,
+                threads=False,
+                group_by="ticker",
+            )
+        except Exception as exc:
+            if _is_network_block_error(exc):
+                _mark_yahoo_temporarily_blocked()
+            batch_df = None
+
+    gold = _extract_hist(batch_df, "GC=F")
+    silver = _extract_hist(batch_df, "SI=F")
+    if gold.empty:
+        gold = _fetch_history("GC=F", period="5y", interval="1d")
+    if silver.empty:
+        silver = _fetch_history("SI=F", period="5y", interval="1d")
 
     if gold.empty or silver.empty:
         raise ValueError("Unable to fetch gold/silver data.")
@@ -1334,12 +1342,14 @@ def gold_silver_correlation():
     y_line = slope * x_line + intercept
     regression = [{"x": round(float(xv), 2), "y": round(float(yv), 2)} for xv, yv in zip(x_line, y_line)]
 
-    return {
+    result = {
         "correlation": round(_safe_float(corr), 4),
         "line_graph": line_data,
         "scatter_graph": scatter,
         "linear_graph": regression,
     }
+    _GOLD_SILVER_CACHE = (now, result)
+    return result
 
 
 def _kmeans_numpy(X: np.ndarray, k: int, max_iter: int = 100, random_state: int = 42):
@@ -1676,6 +1686,12 @@ def forecast_stock_prices(symbol: str, forecast_days: int = 30):
         raise ValueError("Ticker symbol is required.")
 
     forecast_days = int(max(5, min(int(forecast_days or 30), 180)))
+    cache_key = f"{normalized_symbol}|{forecast_days}"
+    now = time.time()
+    cached = _FORECAST_CACHE.get(cache_key)
+    if cached and (now - cached[0]) <= _FORECAST_CACHE_TTL_SECONDS:
+        return cached[1]
+
     history = _fetch_history(normalized_symbol, period="1y", interval="1d")
     if history is None or history.empty:
         raise ValueError("Unable to fetch historical prices for forecasting.")
@@ -1705,7 +1721,7 @@ def forecast_stock_prices(symbol: str, forecast_days: int = 30):
         for idx, v in zip(future_dates, y_future)
     ]
 
-    return {
+    result = {
         "symbol": normalized_symbol,
         "model": "linear_regression",
         "forecast_days": forecast_days,
@@ -1715,6 +1731,8 @@ def forecast_stock_prices(symbol: str, forecast_days: int = 30):
         "history": history_points,
         "forecast": forecast_points,
     }
+    _FORECAST_CACHE[cache_key] = (now, result)
+    return result
 
 
 def portfolio_next_day_predictions(stocks: list[dict]):
@@ -1730,10 +1748,57 @@ def portfolio_next_day_predictions(stocks: list[dict]):
             }
 
     symbols = sorted(symbol_meta.keys())
+    cache_key = ",".join(symbols)
+    now = time.time()
+    cached = _NEXT_DAY_CACHE.get(cache_key)
+    if cached and (now - cached[0]) <= _NEXT_DAY_CACHE_TTL_SECONDS:
+        return cached[1]
+
     items = []
+    batch_df = None
+    if symbols and (not _is_yahoo_temporarily_blocked()):
+        try:
+            batch_df = yf.download(
+                " ".join(symbols),
+                period="1y",
+                interval="1d",
+                auto_adjust=False,
+                progress=False,
+                threads=False,
+                group_by="ticker",
+            )
+        except Exception as exc:
+            if _is_network_block_error(exc):
+                _mark_yahoo_temporarily_blocked()
+            batch_df = None
+
+    def _extract_hist(df, symbol):
+        if df is None or len(df) == 0:
+            return None
+        try:
+            if isinstance(df.columns, pd.MultiIndex):
+                lvl0 = list(df.columns.get_level_values(0))
+                lvl1 = list(df.columns.get_level_values(1))
+                if symbol in lvl1:
+                    sub = df.xs(symbol, axis=1, level=1)
+                elif symbol in lvl0:
+                    sub = df.xs(symbol, axis=1, level=0)
+                else:
+                    return None
+            else:
+                sub = df
+            close_col = "Close" if "Close" in sub.columns else None
+            if close_col is None:
+                return None
+            return sub.dropna(subset=[close_col]).copy()
+        except Exception:
+            return None
+
     for symbol in symbols:
         try:
-            history = _fetch_history(symbol, period="1y", interval="1d")
+            history = _extract_hist(batch_df, symbol)
+            if history is None or history.empty:
+                history = _fetch_history(symbol, period="1y", interval="1d")
             if history is None or history.empty:
                 continue
             close = history["Close"].dropna()
@@ -1757,4 +1822,6 @@ def portfolio_next_day_predictions(stocks: list[dict]):
             )
         except Exception:
             continue
-    return {"items": items}
+    result = {"items": items}
+    _NEXT_DAY_CACHE[cache_key] = (now, result)
+    return result

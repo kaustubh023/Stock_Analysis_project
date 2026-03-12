@@ -1,8 +1,48 @@
 import axios from "axios";
 
+const envBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").trim();
+
+function resolveBaseUrl() {
+  if (envBaseUrl) {
+    return envBaseUrl;
+  }
+
+  if (typeof window === "undefined") {
+    return "/api";
+  }
+
+  const { protocol, hostname } = window.location;
+  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+
+  if (isLocalhost) {
+    return "/api";
+  }
+
+  return `${protocol}//${hostname}:8000/api`;
+}
+
+const baseURL = resolveBaseUrl();
+
 const api = axios.create({
-  baseURL: "/api",
+  baseURL,
 });
+
+function clearStoredAuth() {
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  localStorage.removeItem("username");
+}
+
+function redirectToLogin() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const currentPath = window.location.pathname || "";
+  if (currentPath !== "/login") {
+    window.location.replace("/login");
+  }
+}
 
 const isAuthEndpoint = (url = "") =>
   url.startsWith("/auth/login/") ||
@@ -38,9 +78,8 @@ api.interceptors.response.use(
 
     const refreshToken = localStorage.getItem("refresh_token");
     if (!refreshToken) {
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
-      localStorage.removeItem("username");
+      clearStoredAuth();
+      redirectToLogin();
       return Promise.reject(error);
     }
 
@@ -72,9 +111,8 @@ api.interceptors.response.use(
       originalRequest.headers.Authorization = `Bearer ${nextAccess}`;
       return api(originalRequest);
     } catch (refreshError) {
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
-      localStorage.removeItem("username");
+      clearStoredAuth();
+      redirectToLogin();
       return Promise.reject(refreshError);
     }
   }

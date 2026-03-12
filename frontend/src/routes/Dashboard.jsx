@@ -26,6 +26,7 @@ function DashboardPage() {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
+  const [searching, setSearching] = useState(false);
   const [compareA, setCompareA] = useState("");
   const [compareB, setCompareB] = useState("");
   const [compareResult, setCompareResult] = useState(null);
@@ -98,6 +99,7 @@ function DashboardPage() {
         return;
       }
       try {
+        setSearching(true);
         const res = await api.get(`/stocks/search/?q=${encodeURIComponent(query)}`);
         const rows = res.data.results || [];
         searchCacheRef.current.set(key, rows);
@@ -105,6 +107,7 @@ function DashboardPage() {
       } catch {
         setSuggestions([]);
       } finally {
+        setSearching(false);
         setShowSuggestions(true);
       }
     }, 70);
@@ -116,6 +119,7 @@ function DashboardPage() {
     setQuery("");
     setSelectedSuggestion(null);
     setSuggestions([]);
+    setSearching(false);
     setShowSuggestions(false);
   }, [sector, selectedType]);
 
@@ -299,7 +303,9 @@ function DashboardPage() {
                 />
                 {showSuggestions && selectedType && query.length >= 1 && (
                   <div className="suggestions">
-                    {suggestions.length > 0 ? (
+                    {searching ? (
+                      <div className="suggestion-empty">Searching stocks...</div>
+                    ) : suggestions.length > 0 ? (
                       suggestions.map((s) => (
                         <button
                           key={s.symbol}
@@ -314,7 +320,7 @@ function DashboardPage() {
                         </button>
                       ))
                     ) : (
-                      <div className="suggestion-empty">No stocks found</div>
+                      <div className="suggestion-empty">No stocks found. Try ticker like "TCS" or company name like "Airtel".</div>
                     )}
                   </div>
                 )}

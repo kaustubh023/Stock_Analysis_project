@@ -1,0 +1,186 @@
+Not Found: /
+[10/Mar/2026 18:19:22] "GET / HTTP/1.1" 404 3787
+[10/Mar/2026 18:19:22,558] - Broken pipe from ('127.0.0.1', 55273)
+Unauthorized: /api/portfolio-stocks/
+[10/Mar/2026 18:19:43] "GET /api/portfolio-stocks/ HTTP/1.1" 401 183
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+Unauthorized: /api/portfolio-types/
+[10/Mar/2026 18:19:43] "GET /api/portfolio-types/ HTTP/1.1" 401 183
+Unauthorized: /api/portfolio-stocks/
+Unauthorized: /api/portfolio-types/
+[10/Mar/2026 18:19:43] "GET /api/portfolio-stocks/ HTTP/1.1" 401 183
+[10/Mar/2026 18:19:43] "GET /api/portfolio-types/ HTTP/1.1" 401 183
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:153: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+[10/Mar/2026 18:19:43] "POST /api/user/token/refresh/ HTTP/1.1" 200 242
+[10/Mar/2026 18:19:43] "GET /api/portfolio-types/ HTTP/1.1" 200 222
+[10/Mar/2026 18:19:43] "GET /api/portfolio-stocks/ HTTP/1.1" 200 1087
+[10/Mar/2026 18:19:43] "GET /api/portfolio-types/ HTTP/1.1" 200 222
+[10/Mar/2026 18:19:43] "GET /api/portfolio-stocks/ HTTP/1.1" 200 1087
+
+1 Failed download:
+['BHARTIARTL.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+[10/Mar/2026 18:20:27] "POST /api/portfolio-types/ HTTP/1.1" 201 76
+[10/Mar/2026 18:20:27] "GET /api/portfolio-types/ HTTP/1.1" 200 299
+[10/Mar/2026 18:20:27] "GET /api/portfolio-stocks/ HTTP/1.1" 200 1087
+
+1 Failed download:
+['BHARTIARTL.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+[10/Mar/2026 18:20:38] "GET /api/stocks/search/?q=T HTTP/1.1" 200 676
+[10/Mar/2026 18:20:44] "GET /api/stocks/search/?q=TC HTTP/1.1" 200 85
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+[10/Mar/2026 18:20:47] "GET /api/stocks/search/?q=TCS HTTP/1.1" 200 85
+[10/Mar/2026 18:20:50] "GET /api/stocks/search/?q=TCS.NS%20-%20Tata%20Consultancy%20Services%20(NSE) HTTP/1.1" 200 14
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+[10/Mar/2026 18:20:59] "GET /api/stocks/search/?q=TCS.NS%20-%20Tata%20Consultancy%20Services%20(NSE HTTP/1.1" 200 14
+[10/Mar/2026 18:21:04] "GET /api/stocks/search/?q=Ti HTTP/1.1" 200 75
+[10/Mar/2026 18:21:07] "GET /api/stocks/search/?q=TITAN.NS%20-%20Titan%20Company%20(NSE) HTTP/1.1" 200 14
+
+1 Failed download:
+['HDFCBANK.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+
+1 Failed download:
+['HDFCBANK.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+
+1 Failed download:
+['HDFCBANK.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+
+1 Failed download:
+['HDFCBANK.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+
+1 Failed download:
+['HDFCBANK.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+[10/Mar/2026 18:21:48] "GET /api/portfolio-types/ HTTP/1.1" 200 299
+[10/Mar/2026 18:21:48] "GET /api/portfolio-stocks/ HTTP/1.1" 200 1087
+[10/Mar/2026 18:21:48] "GET /api/portfolio-types/ HTTP/1.1" 200 299
+[10/Mar/2026 18:21:49] "GET /api/portfolio-stocks/ HTTP/1.1" 200 1087
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+[10/Mar/2026 18:21:51] "GET /api/stocks/BHARTIARTL.NS/analytics/ HTTP/1.1" 200 26627
+[10/Mar/2026 18:21:51] "GET /api/stocks/BHARTIARTL.NS/analytics/ HTTP/1.1" 200 26627
+[10/Mar/2026 18:21:53] "GET /api/stocks/HDFCBANK.NS/analytics/ HTTP/1.1" 200 27045
+
+1 Failed download:
+['RELIANCE.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+[10/Mar/2026 18:22:06] "GET /api/stocks/HDFCBANK.NS/analytics/ HTTP/1.1" 200 27045
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+[10/Mar/2026 18:22:12] "GET /api/portfolio-types/ HTTP/1.1" 200 299
+[10/Mar/2026 18:22:12] "GET /api/portfolio-stocks/ HTTP/1.1" 200 1087
+[10/Mar/2026 18:22:12] "GET /api/portfolio-types/ HTTP/1.1" 200 299
+[10/Mar/2026 18:22:12] "GET /api/portfolio-stocks/ HTTP/1.1" 200 1087
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+[10/Mar/2026 18:22:14] "GET /api/portfolio-types/ HTTP/1.1" 200 299
+[10/Mar/2026 18:22:14] "GET /api/portfolio-stocks/ HTTP/1.1" 200 1087
+[10/Mar/2026 18:22:14] "GET /api/portfolio-types/ HTTP/1.1" 200 299
+[10/Mar/2026 18:22:14] "GET /api/portfolio-stocks/ HTTP/1.1" 200 1087
+
+1 Failed download:
+['RELIANCE.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+[10/Mar/2026 18:22:23] "GET /api/portfolio-stocks/ HTTP/1.1" 200 1087
+[10/Mar/2026 18:22:23] "GET /api/portfolio-stocks/ HTTP/1.1" 200 1087
+
+1 Failed download:
+['RELIANCE.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+
+1 Failed download:
+['HDFCBANK.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+
+1 Failed download:
+['RELIANCE.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+[10/Mar/2026 18:22:52] "POST /api/stock/compare/ HTTP/1.1" 200 232
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+
+1 Failed download:
+['TCS.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+
+2 Failed downloads:
+['TCS.NS', 'HDFCBANK.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+
+1 Failed download:
+['RELIANCE.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+
+1 Failed download:
+['TCS.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+
+1 Failed download:
+['TCS.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+[10/Mar/2026 18:23:10] "POST /api/stock/compare/ HTTP/1.1" 200 232
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+
+1 Failed download:
+['TCS.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+
+1 Failed download:
+['TCS.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+[10/Mar/2026 18:23:25] "GET /api/portfolio/pe-comparison/ HTTP/1.1" 200 248
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+[10/Mar/2026 18:23:34] "GET /api/portfolio/pe-comparison/ HTTP/1.1" 200 248
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+
+1 Failed download:
+['HDFCBANK.NS']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+TCS.NS: Yahoo web request for share count failed
+$RELIANCE.NS: possibly delisted; no price data found  (period=5d)
+$HDFCBANK.NS: possibly delisted; no price data found  (period=1y)
+TCS.NS: Yahoo web request for share count failed
+Bad Request: /api/stock/compare/
+[10/Mar/2026 20:23:44] "GET /api/portfolio/pe-comparison/ HTTP/1.1" 200 248
+[10/Mar/2026 20:23:44] "POST /api/stock/compare/ HTTP/1.1" 400 36
+[10/Mar/2026 20:23:44] "GET /api/portfolio/pe-comparison/ HTTP/1.1" 200 248
+[10/Mar/2026 20:23:44] "GET /api/portfolio/pe-comparison/ HTTP/1.1" 200 248
+[10/Mar/2026 20:23:44] "GET /api/portfolio/pe-comparison/ HTTP/1.1" 200 248
+
+1 Failed download:
+['BHARTIARTL.NS']: ConnectionError(MaxRetryError('HTTPSConnectionPool(host=\'query2.finance.yahoo.com\', port=443): Max retries exceeded with url: /v8/finance/chart/BHARTIARTL.NS?range=1y&interval=1d&includePrePost=False&events=div%2Csplits%2CcapitalGains&crumb=Too+Many+Requests%0D%0A (Caused by NameResolutionError("HTTPSConnection(host=\'query2.finance.yahoo.com\', port=443): Failed to resolve \'query2.finance.yahoo.com\' ([Errno 11001] getaddrinfo failed)"))'))
+$BHARTIARTL.NS: possibly delisted; no price data found  (period=1y)
+[10/Mar/2026 20:23:44] "GET /api/portfolio/pe-comparison/ HTTP/1.1" 200 248
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+Unauthorized: /api/commodities/gold-silver-correlation/
+[11/Mar/2026 09:54:49] "GET /api/commodities/gold-silver-correlation/ HTTP/1.1" 401 183
+Unauthorized: /api/commodities/gold-silver-correlation/
+[11/Mar/2026 09:54:49] "GET /api/commodities/gold-silver-correlation/ HTTP/1.1" 401 183
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:153: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+[11/Mar/2026 09:54:49] "POST /api/user/token/refresh/ HTTP/1.1" 200 242
+
+1 Failed download:
+['GC=F']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+
+1 Failed download:
+['SI=F']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+[11/Mar/2026 09:55:04] "GET /api/commodities/gold-silver-correlation/ HTTP/1.1" 200 73323
+C:\Users\kpawa\AppData\Roaming\Python\Python313\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 25 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+
+1 Failed download:
+['GC=F']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+
+1 Failed download:
+['SI=F']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+[11/Mar/2026 09:55:12] "GET /api/commodities/gold-silver-correlation/ HTTP/1.1" 200 73323
